@@ -4,27 +4,47 @@ services:
     pull_policy: never
     container_name: saiga-llm
     restart: unless-stopped
-    devices:
-      - /dev/nvidia0:/dev/nvidia0
-      - /dev/nvidia1:/dev/nvidia1
-      - /dev/nvidia2:/dev/nvidia2
-      - /dev/nvidiactl:/dev/nvidiactl
-      - /dev/nvidia-modeset:/dev/nvidia-modeset
-      - /dev/nvidia-uvm:/dev/nvidia-uvm
-      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
-    volumes:
-      - /usr/bin/nvidia-smi:/usr/bin/nvidia-smi
-      - /usr/lib/x86_64-linux-gnu/nvidia/current:/usr/lib/x86_64-linux-gnu/nvidia/current
-      - /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1
-      - ./models:/app/models
+    runtime: nvidia
     environment:
-      - LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/nvidia/current:/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    volumes:
+      - ./models:/app/models
     networks:
       - default
     shm_size: '64gb'
     ports:
       - "7860:7860"
       - "5000:5000"
+    # Образ был собран с симлинком на CUDA stub-библиотеку (для линковки),
+    # которая мешает рантайму. Удаляем перед стартом, чтобы ldconfig резолвил
+    # реальный libcuda.so.1, проброшенный nvidia-container-toolkit.
+    # См. README раздел "Пересборка LLM-образа" — в новом Dockerfile эту строку
+    # надо убрать совсем.
+    entrypoint:
+      - /bin/bash
+      - -c
+      - 'rm -f /usr/local/cuda/lib64/libcuda.so.1 && ldconfig && exec /opt/nvidia/nvidia_entrypoint.sh "$$@"'
+      - --
+    command:
+      - python
+      - server.py
+      - --model-dir
+      - ./models/saiga
+      - --model
+      - saiga_nemo_12b.Q4_K_M.gguf
+      - --listen
+      - --api
+      - --flash-attn
+      - --threads
+      - "10"
+      - --threads-batch
+      - "14"
+      - --cfg-cache
+      - --mlock
+      - --no-mmap
+      - --n-gpu-layers
+      - "999"
 
 networks:
   default:

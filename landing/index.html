@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vaibkod</title>
+<meta name="description" content="vaibkod — local llm playground. saiga 12B on home GPU. no cloud, no telemetry.">
+<meta property="og:title" content="vaibkod">
+<meta property="og:description" content="local llm playground. saiga 12B on home GPU.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --g:  #00FF41;
+  --gd: #00cc33;
+  --dim: rgba(0,255,65,0.55);
+  --bdr: rgba(0,255,65,0.22);
+  --bg: #000;
+  --f: 'VT323', monospace;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--g);
+  font-family: var(--f);
+  font-size: 20px;
+  line-height: 1.4;
+  overflow: hidden;
+  cursor: pointer;
+}
+/* CRT scanlines */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg,
+    transparent, transparent 2px,
+    rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px);
+  pointer-events: none;
+  z-index: 9999;
+}
+#mc { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; opacity: 0.18; }
+
+.stage {
+  position: relative; z-index: 1;
+  height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 24px;
+  text-align: center;
+}
+
+/* Glow halo around the logo glyphs */
+.halo {
+  position: relative;
+  width: 220px; height: 220px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 18px;
+}
+.halo::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(circle, rgba(0,255,65,0.36) 0%, rgba(0,255,65,0.10) 38%, transparent 70%);
+  filter: blur(8px);
+  animation: pulse 3s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.08);opacity:0.78} }
+
+/* 3 pixel glyphs in triangle (top, bottom-left, bottom-right) */
+.glyphs { position: relative; width: 140px; height: 130px; }
+.gl {
+  position: absolute;
+  width: 38px; height: 38px;
+  background:
+    /* центральный квадрат */
+    linear-gradient(var(--g), var(--g)) center/14px 14px no-repeat,
+    /* перекрестие 4 квадратика */
+    linear-gradient(var(--g), var(--g)) left center/10px 14px no-repeat,
+    linear-gradient(var(--g), var(--g)) right center/10px 14px no-repeat,
+    linear-gradient(var(--g), var(--g)) center top/14px 10px no-repeat,
+    linear-gradient(var(--g), var(--g)) center bottom/14px 10px no-repeat;
+  filter: drop-shadow(0 0 8px var(--g)) drop-shadow(0 0 14px var(--gd));
+  image-rendering: pixelated;
+}
+.gl.a { top: 0;     left: 50%; transform: translateX(-50%); }
+.gl.b { bottom: 0;  left: 0; }
+.gl.c { bottom: 0;  right: 0; }
+
+/* Brand */
+.title {
+  font-size: clamp(48px, 9vw, 88px);
+  letter-spacing: 2px;
+  text-shadow: 0 0 32px rgba(0,255,65,0.45);
+  margin-bottom: 8px;
+  animation: flk 9s infinite;
+}
+@keyframes flk {
+  0%,94%,96%,98%,100% { opacity: 1 }
+  95% { opacity: 0.68 }
+  97% { opacity: 0.82 }
+  99% { opacity: 0.58 }
+}
+.tag {
+  font-size: clamp(15px, 2.2vw, 20px);
+  color: var(--dim);
+  letter-spacing: 1.5px;
+  margin-bottom: 22px;
+}
+.tag .a { color: var(--g); }
+
+.badges {
+  display: flex; flex-wrap: wrap; justify-content: center;
+  gap: 8px; margin-bottom: 38px;
+  max-width: 540px;
+}
+.badge {
+  border: 1px solid var(--bdr);
+  padding: 3px 10px;
+  font-size: 14px; letter-spacing: 1px;
+  color: var(--dim);
+}
+
+.enter {
+  font-family: var(--f);
+  font-size: clamp(18px, 2.4vw, 22px);
+  letter-spacing: 2px;
+  color: var(--g);
+  text-decoration: none;
+  border: 1px solid var(--bdr);
+  padding: 9px 26px;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-block;
+}
+.enter:hover, .enter:focus {
+  border-color: var(--g);
+  background: rgba(0,255,65,0.06);
+  outline: none;
+}
+.enter .cur {
+  display: inline-block;
+  width: 8px; height: 16px;
+  background: var(--g); margin-left: 4px;
+  vertical-align: middle;
+  animation: blk 1s step-end infinite;
+}
+@keyframes blk { 50% { opacity: 0 } }
+
+.foot {
+  position: fixed; left: 0; right: 0; bottom: 16px;
+  text-align: center;
+  font-size: 13px; color: var(--dim); letter-spacing: 1.5px;
+  z-index: 1;
+}
+
+@media (max-width: 600px) {
+  .halo { width: 180px; height: 180px; margin-bottom: 12px; }
+  .glyphs { width: 120px; height: 110px; }
+  .gl { width: 32px; height: 32px;
+    background:
+      linear-gradient(var(--g), var(--g)) center/12px 12px no-repeat,
+      linear-gradient(var(--g), var(--g)) left center/8px 12px no-repeat,
+      linear-gradient(var(--g), var(--g)) right center/8px 12px no-repeat,
+      linear-gradient(var(--g), var(--g)) center top/12px 8px no-repeat,
+      linear-gradient(var(--g), var(--g)) center bottom/12px 8px no-repeat;
+  }
+  .badges { gap: 6px; }
+  .badge { font-size: 12px; padding: 2px 7px; }
+}
+</style>
+</head>
+<body onclick="enter()">
+
+<canvas id="mc"></canvas>
+
+<div class="stage">
+  <div class="halo">
+    <div class="glyphs">
+      <div class="gl a"></div>
+      <div class="gl b"></div>
+      <div class="gl c"></div>
+    </div>
+  </div>
+
+  <div class="title">vaibkod.</div>
+
+  <div class="tag">
+    <span class="a">local llm.</span>
+    <span> private flow.</span>
+    <span class="a"> no cloud.</span>
+  </div>
+
+  <div class="badges">
+    <span class="badge">SAIGA NEMO 12B</span>
+    <span class="badge">LOCAL GPU</span>
+    <span class="badge">NO OPENAI</span>
+    <span class="badge">NO TELEMETRY</span>
+    <span class="badge">SELF-HOSTED</span>
+  </div>
+
+  <a class="enter" href="https://saiga.vaibkod.ru/" onclick="event.stopPropagation()">
+    [ enter the saiga ]<span class="cur"></span>
+  </a>
+</div>
+
+<div class="foot">[ tap anywhere to enter ] · vaibkod.ru</div>
+
+<script>
+function enter(){ window.location.href = 'https://saiga.vaibkod.ru/'; }
+
+/* MATRIX RAIN — adapted from nospoon */
+(function(){
+  const c = document.getElementById('mc');
+  const ctx = c.getContext('2d');
+  const CH = '+-><[].,01vaibkodSAIGALLM+-><[].,';
+  const FS = 16;
+  let cols, dr;
+  function rz(){
+    c.width = innerWidth;
+    c.height = innerHeight;
+    cols = Math.floor(c.width / FS);
+    dr = new Array(cols).fill(1);
+  }
+  rz();
+  window.addEventListener('resize', rz);
+  setInterval(function(){
+    ctx.fillStyle = 'rgba(0,0,0,0.055)';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.font = FS + 'px "VT323", monospace';
+    for (let i = 0; i < dr.length; i++) {
+      const ch = CH[Math.floor(Math.random() * CH.length)];
+      ctx.globalAlpha = 0.62 + Math.random() * 0.38;
+      ctx.fillStyle = Math.random() > 0.94 ? '#fff' : '#00FF41';
+      ctx.fillText(ch, i * FS, dr[i] * FS);
+      if (dr[i] * FS > c.height && Math.random() > 0.975) dr[i] = 0;
+      dr[i]++;
+    }
+    ctx.globalAlpha = 1;
+  }, 50);
+})();
+</script>
+</body>
+</html>
