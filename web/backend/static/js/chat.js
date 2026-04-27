@@ -1,5 +1,5 @@
 // chat.js — редизайн под новый layout (.msg, .msg-content, .modal-back и т.д.)
-// + минимальный, безопасный markdown-рендер (без сторонних либ).
+// + минимальный, безопасный markdown-рендер с поддержкой nested списков по indent.
 
 (function () {
   // ───── DOM ─────
@@ -44,7 +44,7 @@
     if (stream) stream.scrollTop = stream.scrollHeight;
   };
 
-  // ───── Markdown (свой, безопасный) ─────
+  // ───── Markdown (свой, безопасный, с indent-aware nested lists) ─────
   const escapeHtml = (s) => s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -62,15 +62,17 @@
     return s;
   }
 
-  // классификация строки → 'h' | 'ol' | 'ul' | 'code' | 'empty' | 'p'
-  function lineKind(line) {
-    const t = line.trim();
-    if (!t) return 'empty';
-    if (/^CODE\d+$/.test(t)) return 'code';
-    if (/^#{1,4}\s+/.test(t)) return 'h';
-    if (/^\d+\.\s+/.test(t)) return 'ol';
-    if (/^[-*]\s+/.test(t)) return 'ul';
-    return 'p';
+  // классификация строки: возвращаем kind + indent (число пробелов в начале)
+  function lineMeta(line) {
+    const m = line.match(/^( *)(.*)$/);
+    const indent = m[1].length;
+    const t = m[2].trim();
+    if (!t) return { kind: 'empty', indent };
+    if (/^CODE\d+$/.test(t)) return { kind: 'code', indent, raw: t };
+    if (/^#{1,4}\s+/.test(t)) return { kind: 'h', indent, raw: t };
+    if (/^\d+\.\s+/.test(t)) return { kind: 'ol', indent, raw: t };
+    if (/^[-*+]\s+/.test(t)) return { kind: 'ul', indent, raw: t };
+    return { kind: 'p', indent, raw: t };
   }
 
   function renderMarkdown(src) {
@@ -80,34 +82,13 @@
       blocks.push(`<pre><code>${escapeHtml(code.replace(/\n+$/, ''))}</code></pre>`);
       return `CODE${blocks.length - 1}`;
     });
-
     txt = escapeHtml(txt);
-    let lines = txt.split('\n');
 
-    // 2) схлопнуть пустые строки МЕЖДУ list-item'ами одного типа
-    //    (Saiga часто отдаёт `- a\n\n- b\n\n- c` — это один список без зазоров)
-    const cleaned = [];
-    for (let i = 0; i < lines.length; i++) {
-      if (lineKind(lines[i]) === 'empty') {
-        // ищем ближайшую непустую строку вперёд и назад
-        let prev = cleaned.length ? cleaned[cleaned.length - 1] : '';
-        let next = '';
-        for (let j = i + 1; j < lines.length; j++) {
-          if (lineKind(lines[j]) !== 'empty') { next = lines[j]; break; }
-        }
-        const pk = lineKind(prev), nk = lineKind(next);
-        if ((pk === 'ul' && nk === 'ul') || (pk === 'ol' && nk === 'ol')) {
-          continue; // выкидываем пустую строку внутри списка
-        }
-      }
-      cleaned.push(lines[i]);
-    }
-    lines = cleaned;
-
-    // 3) построчный парсер
+    const lines = txt.split('\n');
     const out = [];
-    let inUL = false, inOL = false;
     let para = [];
+    // stack of open lists: [{ tag: 'ol'|'ul', indent: number }]
+    const stack = [];
 
     const flushPara = () => {
       if (para.length) {
@@ -115,53 +96,58 @@
         para = [];
       }
     };
-    const closeLists = () => {
-      if (inUL) { out.push('</ul>'); inUL = false; }
-      if (inOL) { out.push('</ol>'); inOL = false; }
+    const closeAll = () => {
+      while (stack.length) {
+        out.push(`</${stack.pop().tag}>`);
+      }
+    };
+    const closeUntil = (indent, kind) => {
+      while (stack.length) {
+        const top = stack[stack.length - 1];
+        if (top.indent > indent) { out.push(`</${top.tag}>`); stack.pop(); continue; }
+        if (top.indent === indent && top.tag !== kind) {
+          out.push(`</${top.tag}>`); stack.pop(); continue;
+        }
+        break;
+      }
     };
 
     for (const line of lines) {
-      const trimmed = line.trim();
-      const kind = lineKind(line);
+      const meta = lineMeta(line);
 
-      if (kind === 'code') {
-        flushPara(); closeLists();
-        out.push(blocks[+trimmed.slice(4)]);
+      if (meta.kind === 'code') {
+        flushPara(); closeAll();
+        out.push(blocks[+meta.raw.slice(4)]);
         continue;
       }
-      if (kind === 'h') {
-        flushPara(); closeLists();
-        const h = trimmed.match(/^(#{1,4})\s+(.+?)\s*#*$/);
+      if (meta.kind === 'h') {
+        flushPara(); closeAll();
+        const h = meta.raw.match(/^(#{1,4})\s+(.+?)\s*#*$/);
         const lvl = h[1].length;
         out.push(`<h${lvl}>${renderInline(h[2])}</h${lvl}>`);
         continue;
       }
-      if (kind === 'ol') {
+      if (meta.kind === 'ol' || meta.kind === 'ul') {
         flushPara();
-        if (inUL) { out.push('</ul>'); inUL = false; }
-        if (!inOL) { out.push('<ol>'); inOL = true; }
-        const m = trimmed.match(/^\d+\.\s+(.+)/);
+        const tag = meta.kind;
+        closeUntil(meta.indent, tag);
+        const top = stack[stack.length - 1];
+        if (!top || top.indent < meta.indent) {
+          out.push(`<${tag}>`);
+          stack.push({ tag, indent: meta.indent });
+        }
+        const m = meta.raw.match(/^(?:\d+\.|[-*+])\s+(.+)/);
         out.push(`<li>${renderInline(m[1])}</li>`);
         continue;
       }
-      if (kind === 'ul') {
+      if (meta.kind === 'empty') {
         flushPara();
-        if (inOL) { out.push('</ol>'); inOL = false; }
-        if (!inUL) { out.push('<ul>'); inUL = true; }
-        const m = trimmed.match(/^[-*]\s+(.+)/);
-        out.push(`<li>${renderInline(m[1])}</li>`);
         continue;
       }
-      if (kind === 'empty') {
-        flushPara(); closeLists();
-        continue;
-      }
-      // обычная строка
-      closeLists();
+      closeAll();
       para.push(line);
     }
-    flushPara(); closeLists();
-
+    flushPara(); closeAll();
     return out.join('\n');
   }
 
@@ -179,7 +165,6 @@
     return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
   };
 
-  // ───── Добавить сообщение ─────
   function appendMessage(role, content) {
     const el = document.createElement('div');
     el.className = 'msg';
@@ -229,7 +214,6 @@
     setTimeout(() => el.remove(), 8000);
   }
 
-  // ───── Send ─────
   let busy = false;
   async function send(text) {
     if (busy) return;
@@ -279,7 +263,6 @@
     });
   }
 
-  // ───── Quick replies ─────
   if (quickReplies) {
     quickReplies.addEventListener('click', (e) => {
       if (e.target.classList.contains('qr-btn')) {
@@ -289,7 +272,6 @@
     });
   }
 
-  // ───── File upload ─────
   if (fileBtn && fileInput) {
     fileBtn.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', async (e) => {
@@ -313,7 +295,6 @@
     });
   }
 
-  // ───── Share ─────
   if (shareBtn) {
     shareBtn.addEventListener('click', async () => {
       try {
@@ -336,7 +317,6 @@
     });
   }
 
-  // ───── Close modals on outside click ─────
   document.querySelectorAll('.modal-back').forEach((m) => {
     m.addEventListener('click', (e) => {
       if (e.target === m) m.classList.remove('open');
