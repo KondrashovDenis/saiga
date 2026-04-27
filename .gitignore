@@ -1,0 +1,41 @@
+# Секреты
+.env
+*.env.local
+
+# Модели LLM (тяжёлые, не в git)
+llm/models/**/*.gguf
+llm/models/**/*.bin
+llm/models/**/*.safetensors
+llm/models/**/*.pt
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+.Python
+*.egg-info/
+.venv/
+venv/
+
+# Логи и временное
+*.log
+logs/
+*.tmp
+*.swp
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes (если случайно создались локально)
+data/
+
+# Бенчмарки (артефакты)
+llm/llm_benchmark_*.csv
+
+# debug
+llm/debug_script.py

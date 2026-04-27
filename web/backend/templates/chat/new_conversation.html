@@ -1,0 +1,43 @@
+{% extends 'layout.html' %}
+
+{% block title %}Новый диалог{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Создание нового диалога</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('conversations.new') }}">
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Название диалога</label>
+                        <input type="text" class="form-control" id="title" name="title" 
+                               placeholder="Введите название или оставьте пустым для автоматического названия">
+                        <div class="form-text">
+                            Если оставить пустым, название будет создано автоматически на основе первого сообщения.
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="model" class="form-label">Модель</label>
+                        <select class="form-select" id="model" name="model">
+                            <option value="saiga_nemo_12b" selected>Saiga Nemo 12B</option>
+                        </select>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus-circle me-2"></i> Создать и начать диалог
+                        </button>
+                        <a href="{{ url_for('conversations.list') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-2"></i> Отмена
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

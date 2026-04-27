@@ -1,0 +1,30 @@
+{% extends 'layout.html' %}
+
+{% block title %}Ошибка {{ error_code }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 text-center">
+        <div class="error-page py-5">
+            <h1 class="display-1">{{ error_code }}</h1>
+            <h2 class="mb-4">{{ error_message }}</h2>
+            
+            <p class="lead mb-4">
+                {% if error_code == 404 %}
+                Запрашиваемая страница не найдена. Возможно, ссылка устарела или была введена неверно.
+                {% elif error_code == 403 %}
+                У вас нет доступа к этому ресурсу.
+                {% elif error_code == 500 %}
+                Произошла внутренняя ошибка сервера. Пожалуйста, попробуйте позже.
+                {% else %}
+                Произошла ошибка. Пожалуйста, вернитесь на главную страницу.
+                {% endif %}
+            </p>
+            
+            <a href="{{ url_for('index') }}" class="btn btn-primary">
+                <i class="fas fa-home me-2"></i> Вернуться на главную
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

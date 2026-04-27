@@ -1,0 +1,97 @@
+{% extends 'layout.html' %}
+
+{% block title %}Связать Telegram аккаунт{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">
+                    <i class="fab fa-telegram-plane me-2"></i>
+                    Связать Telegram аккаунт
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h5><i class="fas fa-info-circle me-2"></i>Ваш Telegram профиль:</h5>
+                    <p class="mb-2">
+                        <strong>Имя:</strong> {{ telegram_data.first_name }} {{ telegram_data.last_name }}
+                    </p>
+                    {% if telegram_data.username %}
+                    <p class="mb-2">
+                        <strong>Username:</strong> @{{ telegram_data.username }}
+                    </p>
+                    {% endif %}
+                    <p class="mb-0">
+                        <strong>ID:</strong> {{ telegram_data.id }}
+                    </p>
+                </div>
+
+                <p class="mb-4">
+                    Выберите один из вариантов:
+                </p>
+
+                <!-- Создать новый аккаунт -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <h5 class="card-title text-success">
+                                    <i class="fas fa-user-plus me-2"></i>
+                                    Создать новый аккаунт
+                                </h5>
+                                <p class="card-text">
+                                    Создать новый аккаунт с авторизацией через Telegram
+                                </p>
+                                <form method="POST" action="{{ url_for('telegram_auth.create_account') }}">
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="fas fa-plus-circle me-2"></i>
+                                        Создать аккаунт
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Связать с существующим -->
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title text-primary">
+                                    <i class="fas fa-link me-2"></i>
+                                    Связать с существующим
+                                </h5>
+                                <p class="card-text">
+                                    Связать Telegram с уже существующим аккаунтом
+                                </p>
+                                <form method="POST" action="{{ url_for('telegram_auth.link_existing') }}">
+                                    <div class="mb-3">
+                                        <label for="email" class="form-label">Email</label>
+                                        <input type="email" class="form-control" id="email" name="email" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="password" class="form-label">Пароль</label>
+                                        <input type="password" class="form-control" id="password" name="password" required>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary w-100">
+                                        <i class="fas fa-link me-2"></i>
+                                        Связать аккаунты
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center">
+                    <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>
+                        Назад к входу
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

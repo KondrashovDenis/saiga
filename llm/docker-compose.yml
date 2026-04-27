@@ -1,0 +1,32 @@
+services:
+  saiga:
+    image: llm-docker-saiga:latest
+    pull_policy: never
+    container_name: saiga-llm
+    restart: unless-stopped
+    devices:
+      - /dev/nvidia0:/dev/nvidia0
+      - /dev/nvidia1:/dev/nvidia1
+      - /dev/nvidia2:/dev/nvidia2
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia-modeset:/dev/nvidia-modeset
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
+    volumes:
+      - /usr/bin/nvidia-smi:/usr/bin/nvidia-smi
+      - /usr/lib/x86_64-linux-gnu/nvidia/current:/usr/lib/x86_64-linux-gnu/nvidia/current
+      - /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1
+      - ./models:/app/models
+    environment:
+      - LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/nvidia/current:/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+    networks:
+      - default
+    shm_size: '64gb'
+    ports:
+      - "7860:7860"
+      - "5000:5000"
+
+networks:
+  default:
+    name: nginx-proxy
+    external: true

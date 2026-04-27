@@ -1,0 +1,118 @@
+{% extends 'layout.html' %}
+
+{% block title %}Вход в систему{% endblock %}
+
+{% block extra_css %}
+<style>
+.telegram-login-btn {
+    background-color: #0088cc;
+    border-color: #0088cc;
+    color: white;
+}
+.telegram-login-btn:hover {
+    background-color: #006699;
+    border-color: #006699;
+    color: white;
+}
+.divider {
+    text-align: center;
+    margin: 20px 0;
+    position: relative;
+}
+.divider::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: #dee2e6;
+}
+.divider span {
+    background: white;
+    padding: 0 15px;
+    color: #6c757d;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Вход в систему</h4>
+            </div>
+            <div class="card-body">
+                <!-- Telegram Login -->
+                <div class="mb-4 text-center">
+                    <div id="telegram-login-container">
+                        <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                                data-telegram-login="saiga_ai_bot" 
+                                data-size="large" 
+                                data-corner-radius="5"
+                                data-auth-url="https://saiga.denciaopin.com{{ url_for('telegram_auth.telegram_callback') }}"
+                                data-request-access="write">
+                        </script>
+                    </div>
+                    <p class="text-muted mt-2 small">
+                        <i class="fab fa-telegram-plane me-1"></i>
+                        Быстрый вход через Telegram
+                    </p>
+                </div>
+
+                <div class="divider">
+                    <span>или войдите с паролем</span>
+                </div>
+
+                <!-- Email/Password Login -->
+                <form method="POST" action="{{ url_for('auth.login') }}">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="mb-3">
+                        {{ form.username.label(class="form-label") }}
+                        {% if form.username.errors %}
+                            {{ form.username(class="form-control is-invalid") }}
+                            <div class="invalid-feedback">
+                                {% for error in form.username.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            {{ form.username(class="form-control") }}
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.password.label(class="form-label") }}
+                        {% if form.password.errors %}
+                            {{ form.password(class="form-control is-invalid") }}
+                            <div class="invalid-feedback">
+                                {% for error in form.password.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            {{ form.password(class="form-control") }}
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        {{ form.remember_me(class="form-check-input") }}
+                        {{ form.remember_me.label(class="form-check-label") }}
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        {{ form.submit(class="btn btn-primary") }}
+                    </div>
+                </form>
+            </div>
+            <div class="card-footer text-center">
+                <p class="mb-0">
+                    Еще нет аккаунта? <a href="{{ url_for('auth.register') }}">Зарегистрируйтесь</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

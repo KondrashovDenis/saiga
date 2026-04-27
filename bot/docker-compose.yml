@@ -1,0 +1,39 @@
+services:
+  saiga-telegram-bot:
+    image: saiga-telegram-bot-saiga-telegram-bot:latest
+    pull_policy: never
+    container_name: saiga-telegram-bot
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - bot-logs:/app/logs
+      - shared-saiga-db:/app/data
+    environment:
+      - DATABASE_URL=sqlite:////app/data/app.db
+      - LLM_API_URL=http://saiga-llm:5000/v1/chat/completions
+      - DEFAULT_TEMPERATURE=0.7
+      - DEFAULT_TOP_P=0.9
+      - DEFAULT_MAX_TOKENS=2048
+    networks:
+      - nginx-proxy
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7.0-alpine
+    container_name: saiga-bot-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    networks:
+      - nginx-proxy
+
+volumes:
+  shared-saiga-db:
+    external: true
+  bot-logs:
+  redis-data:
+
+networks:
+  nginx-proxy:
+    external: true

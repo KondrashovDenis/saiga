@@ -1,0 +1,172 @@
+{% extends 'layout.html' %}
+
+{% block title %}Настройки пользователя{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">
+                    <i class="fas fa-cog me-2"></i>Настройки пользователя
+                </h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('settings.user_settings') }}">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5 class="border-bottom pb-2 mb-3">
+                                <i class="fas fa-palette me-2"></i>Внешний вид
+                            </h5>
+                            
+                            <div class="mb-3">
+                                {{ form.ui_theme.label(class="form-label") }}
+                                {% if form.ui_theme.errors %}
+                                    {{ form.ui_theme(class="form-select is-invalid") }}
+                                    <div class="invalid-feedback">
+                                        {% for error in form.ui_theme.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    {{ form.ui_theme(class="form-select") }}
+                                {% endif %}
+                                <div class="form-text">Автоматическая тема следует системным настройкам</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    {{ form.message_animations(class="form-check-input") }}
+                                    {{ form.message_animations.label(class="form-check-label") }}
+                                </div>
+                                <div class="form-text">Анимации появления и перехода сообщений</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    {{ form.auto_scroll(class="form-check-input") }}
+                                    {{ form.auto_scroll.label(class="form-check-label") }}
+                                </div>
+                                <div class="form-text">Автоматически прокручивать чат к новым сообщениям</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    {{ form.show_timestamps(class="form-check-input") }}
+                                    {{ form.show_timestamps.label(class="form-check-label") }}
+                                </div>
+                                <div class="form-text">Показывать время отправки сообщений</div>
+                            </div>
+                            
+                            <h5 class="border-bottom pb-2 mb-3 mt-4">
+                                <i class="fas fa-comments me-2"></i>Функции чата
+                            </h5>
+                            
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    {{ form.show_quick_replies(class="form-check-input") }}
+                                    {{ form.show_quick_replies.label(class="form-check-label") }}
+                                </div>
+                                <div class="form-text">Показывать кнопки быстрых ответов</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    {{ form.enable_reactions(class="form-check-input") }}
+                                    {{ form.enable_reactions.label(class="form-check-label") }}
+                                </div>
+                                <div class="form-text">Включить реакции на сообщения (👍, 👎, ❤️, 🤔)</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    {{ form.markdown_support(class="form-check-input") }}
+                                    {{ form.markdown_support.label(class="form-check-label") }}
+                                </div>
+                                <div class="form-text">Поддержка **жирного**, *курсивного* текста и `кода`</div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h5 class="border-bottom pb-2 mb-3">
+                                <i class="fas fa-brain me-2"></i>Параметры модели
+                            </h5>
+                            
+                            <div class="mb-3">
+                                {{ form.temperature.label(class="form-label") }}
+                                {% if form.temperature.errors %}
+                                    {{ form.temperature(class="form-control is-invalid", step="0.1") }}
+                                    <div class="invalid-feedback">
+                                        {% for error in form.temperature.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    {{ form.temperature(class="form-control", step="0.1") }}
+                                {% endif %}
+                                <div class="form-text">
+                                    Контролирует креативность ответов (0.1-1.0). 
+                                    Низкие значения = более точные ответы, высокие = более творческие
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                {{ form.top_p.label(class="form-label") }}
+                                {% if form.top_p.errors %}
+                                    {{ form.top_p(class="form-control is-invalid", step="0.1") }}
+                                    <div class="invalid-feedback">
+                                        {% for error in form.top_p.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    {{ form.top_p(class="form-control", step="0.1") }}
+                                {% endif %}
+                                <div class="form-text">
+                                    Определяет разнообразие словарного запаса (0.1-1.0).
+                                    Более низкие значения делают ответы более сфокусированными
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Рекомендации:</strong>
+                                <ul class="mb-0 mt-2">
+                                    <li>Для точных ответов: Temperature 0.3, Top P 0.7</li>
+                                    <li>Для творческих задач: Temperature 0.8, Top P 0.9</li>
+                                    <li>Для кодирования: Temperature 0.1, Top P 0.5</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-light p-3 rounded">
+                                <h6><i class="fas fa-user me-2"></i>Информация о профиле</h6>
+                                <p class="mb-1"><strong>Пользователь:</strong> {{ current_user.display_name }}</p>
+                                <p class="mb-1"><strong>Email:</strong> {{ current_user.email }}</p>
+                                <p class="mb-0"><strong>Регистрация:</strong> {{ current_user.created_at.strftime('%d.%m.%Y') }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 mt-4">
+                        {{ form.submit(class="btn btn-primary btn-lg") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.form-check {
+    padding-left: 1.5em;
+}
+.form-check-input {
+    margin-left: -1.5em;
+}
+.bg-light {
+    background-color: var(--bg-secondary) !important;
+}
+</style>
+{% endblock %}
