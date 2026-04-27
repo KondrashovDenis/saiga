@@ -3,14 +3,13 @@
 # Что делает:
 #   vaibkod.ru, www.vaibkod.ru → static landing из /srv/landing
 #   saiga.vaibkod.ru           → saiga-web-app:5000 (Flask, без auth — внутри web свой login)
-#   llm.vaibkod.ru             → saiga-llm:5000 с проверкой Authorization: Bearer
+#   llm.vaibkod.ru             → saiga-llm:5000 (OpenAI API) с проверкой Authorization: Bearer
+#   saigaui.vaibkod.ru         → saiga-llm:7860 (Gradio UI, text-generation-webui) с HTTP Basic Auth
 #
 # TLS — автоматический LetsEncrypt. Email берётся из глобального блока.
-# Сертификаты и stat в volume caddy-data (сохраняются между перезапусками).
 
 {
     email {$LE_EMAIL}
-    # Минимальные тайм-ауты для idle (Caddy default ок), большие — на route
 }
 
 # ──────────────── LANDING ────────────────
@@ -28,7 +27,6 @@ vaibkod.ru, www.vaibkod.ru {
 saiga.vaibkod.ru {
     encode gzip zstd
     reverse_proxy saiga-web-app:5000 {
-        # Flask/Werkzeug — небольшие таймауты
         transport http {
             read_timeout 60s
             write_timeout 60s
@@ -36,15 +34,13 @@ saiga.vaibkod.ru {
     }
 }
 
-# ──────────────── LLM API (с Bearer-auth) ────────────────
+# ──────────────── LLM API (Bearer-auth) ────────────────
 llm.vaibkod.ru {
     encode gzip zstd
 
-    # Проверка Bearer-токена. Если не совпадает — 401.
     @authorized header Authorization "Bearer {$LLM_API_KEY}"
 
     handle @authorized {
-        # Длинные таймауты — генерация может идти 30+ сек
         reverse_proxy saiga-llm:5000 {
             transport http {
                 read_timeout 600s
@@ -57,6 +53,27 @@ llm.vaibkod.ru {
     handle {
         respond "Unauthorized" 401 {
             close
+        }
+    }
+}
+
+# ──────────────── LLM Web UI (HTTP Basic Auth) ────────────────
+saigaui.vaibkod.ru {
+    encode gzip zstd
+
+    basic_auth {
+        # Логин: denciao
+        # Bcrypt-хеш сгенерирован через `docker run --rm caddy:2-alpine caddy hash-password --plaintext '...'`.
+        # Пароль в открытом виде сохранён в proxy/.env (SAIGAUI_PASSWORD) для памяти.
+        # Ротация: новый openssl rand → новый caddy hash-password → подменить хеш ниже → docker compose up -d.
+        denciao $2a$14$rdiH8msX3HizdEeaIT6/Lux38mc0dAB2tDmM5xQIngE2EaSXbNsEm
+    }
+
+    reverse_proxy saiga-llm:7860 {
+        # Gradio использует WebSocket для real-time stream — Caddy умеет автоматически.
+        transport http {
+            read_timeout 600s
+            write_timeout 600s
         }
     }
 }
