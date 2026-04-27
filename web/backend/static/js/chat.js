@@ -1,4 +1,5 @@
 // chat.js — редизайн под новый layout (.msg, .msg-content, .modal-back и т.д.)
+// + минимальный, безопасный markdown-рендер (без сторонних либ).
 
 (function () {
   // ───── DOM ─────
@@ -42,17 +43,124 @@
   const scrollDown = () => {
     if (stream) stream.scrollTop = stream.scrollHeight;
   };
-  scrollDown();
 
-  // ───── Markdown lite ─────
+  // ───── Markdown (свой, безопасный) ─────
+  // Поддерживаем: # ## ### заголовки, **bold**, *italic*, `code`, ```block```,
+  // - / * списки, [link](url), abзацы.
   const escapeHtml = (s) => s
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const md = (s) => escapeHtml(s)
-    .replace(/```([\s\S]*?)```/g, (_, code) => `<pre><code>${code.trim()}</code></pre>`)
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-    .replace(/\n/g, '<br>');
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  function renderInline(s) {
+    // inline `code` сначала — чтобы внутри ** не парсилось
+    s = s.replace(/`([^`\n]+)`/g, (_, c) => `<code>${escapeHtml(c)}</code>`);
+    // **bold** (greedy non-greedy)
+    s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    // *italic* / _italic_ — но не звёздочки в списках в начале строки (мы парсим списки выше)
+    s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+    s = s.replace(/(^|\W)_([^_\n]+)_(?!\w)/g, '$1<em>$2</em>');
+    // [text](url)
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, t, u) =>
+      `<a href="${escapeHtml(u)}" target="_blank" rel="noopener">${t}</a>`);
+    return s;
+  }
+
+  function renderMarkdown(src) {
+    // 1) выделить fenced code blocks (```...```) и временно заменить плейсхолдером
+    const blocks = [];
+    let txt = src.replace(/```(\w+)?\n?([\s\S]*?)```/g, (_, lang, code) => {
+      blocks.push(`<pre><code>${escapeHtml(code.replace(/\n+$/, ''))}</code></pre>`);
+      return `CODE${blocks.length - 1}`;
+    });
+
+    // 2) escape HTML на всём остальном
+    txt = escapeHtml(txt);
+
+    // 3) разбираем построчно
+    const lines = txt.split('\n');
+    const out = [];
+    let inList = false;
+    let inOL = false;
+    let para = [];
+
+    const flushPara = () => {
+      if (para.length) {
+        out.push('<p>' + renderInline(para.join(' ')) + '</p>');
+        para = [];
+      }
+    };
+    const closeLists = () => {
+      if (inList) { out.push('</ul>'); inList = false; }
+      if (inOL)   { out.push('</ol>'); inOL = false; }
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // placeholder code block — пропускаем без обработки
+      const codeMatch = trimmed.match(/^CODE(\d+)$/);
+      if (codeMatch) {
+        flushPara(); closeLists();
+        out.push(blocks[+codeMatch[1]]);
+        continue;
+      }
+
+      // headings #, ##, ###
+      const h = trimmed.match(/^(#{1,4})\s+(.+?)\s*#*$/);
+      if (h) {
+        flushPara(); closeLists();
+        const lvl = h[1].length;
+        out.push(`<h${lvl}>${renderInline(h[2])}</h${lvl}>`);
+        continue;
+      }
+
+      // numbered list "1. item"
+      const ol = trimmed.match(/^(\d+)\.\s+(.+)/);
+      if (ol) {
+        flushPara();
+        if (inList) { out.push('</ul>'); inList = false; }
+        if (!inOL) { out.push('<ol>'); inOL = true; }
+        out.push(`<li>${renderInline(ol[2])}</li>`);
+        continue;
+      }
+
+      // bullet list "- item" / "* item"
+      const ul = trimmed.match(/^[-*]\s+(.+)/);
+      if (ul) {
+        flushPara();
+        if (inOL) { out.push('</ol>'); inOL = false; }
+        if (!inList) { out.push('<ul>'); inList = true; }
+        out.push(`<li>${renderInline(ul[1])}</li>`);
+        continue;
+      }
+
+      // пустая строка → конец параграфа/списка
+      if (!trimmed) {
+        flushPara(); closeLists();
+        continue;
+      }
+
+      // прочее — копим в параграф
+      closeLists();
+      para.push(line);
+    }
+    flushPara(); closeLists();
+
+    return out.join('\n');
+  }
+
+  // отрендерить markdown в существующих исторических .msg-content
+  document.querySelectorAll('.msg-content').forEach((el) => {
+    if (el.dataset.rendered) return;
+    const raw = el.textContent;  // в шаблоне stored as plain text via Jinja escape
+    el.innerHTML = renderMarkdown(raw);
+    el.dataset.rendered = '1';
+  });
+  scrollDown();
 
   const now = () => {
     const d = new Date();
@@ -66,11 +174,12 @@
     el.dataset.role = role;
     const initial = role === 'user' ? userInitial : 'S';
     const roleLabel = role === 'user' ? 'Вы' : 'Saiga';
+    const contentHtml = renderMarkdown(content);
     el.innerHTML = `
       <div class="msg-avatar ${role}">${escapeHtml(initial)}</div>
       <div class="msg-body">
         <div class="msg-role">${roleLabel} · ${now()}</div>
-        <div class="msg-content">${md(content)}</div>
+        <div class="msg-content" data-rendered="1">${contentHtml}</div>
       </div>`;
     messages.appendChild(el);
     scrollDown();
