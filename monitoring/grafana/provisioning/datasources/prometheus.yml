@@ -1,12 +1,13 @@
 # Grafana datasource provisioning.
-# Файл читается при старте: автоматически создаётся datasource Prometheus,
-# чтобы не настраивать руками через UI.
+# Файл читается при старте: автоматически создаётся datasource Prometheus.
+# uid: prometheus — фиксируем явно, чтобы dashboards могли ссылаться predictable.
 apiVersion: 1
 
 datasources:
   - name: Prometheus
+    uid: prometheus
     type: prometheus
-    access: proxy           # Grafana ходит к Prometheus сама, не браузер юзера
+    access: proxy
     url: http://prometheus:9090
     isDefault: true
-    editable: false         # запретим менять через UI — конфиг через git
+    editable: false

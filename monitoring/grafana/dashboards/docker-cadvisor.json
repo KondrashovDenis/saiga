@@ -1,24 +1,37 @@
 {
   "title": "Docker Containers (custom)",
   "uid": "saiga-cadvisor",
-  "tags": ["docker", "cadvisor", "saiga"],
+  "tags": [
+    "docker",
+    "cadvisor",
+    "saiga"
+  ],
   "timezone": "browser",
   "schemaVersion": 39,
   "version": 1,
   "refresh": "30s",
-  "time": { "from": "now-1h", "to": "now" },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "templating": {
     "list": [
       {
         "name": "container",
         "type": "query",
-        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
         "query": "label_values(container_last_seen, name)",
-        "regex": "/^(?!).+$/",
-        "current": { "text": "All", "value": "$__all" },
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
         "includeAll": true,
         "multi": true,
-        "refresh": 2
+        "refresh": 2,
+        "allValue": ".+"
       }
     ]
   },
@@ -27,7 +40,10 @@
       "id": 1,
       "type": "timeseries",
       "title": "CPU usage (cores) per container",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name=~\"$container\", name!=\"\"}[1m]))",
@@ -35,14 +51,27 @@
           "refId": "A"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "none", "decimals": 2 } },
-      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      }
     },
     {
       "id": 2,
       "type": "timeseries",
       "title": "Memory used (RSS) per container",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "sum by (name) (container_memory_rss{name=~\"$container\", name!=\"\"})",
@@ -50,14 +79,26 @@
           "refId": "A"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "decbytes" } },
-      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decbytes"
+        }
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      }
     },
     {
       "id": 3,
       "type": "timeseries",
       "title": "Network RX (B/s)",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "sum by (name) (rate(container_network_receive_bytes_total{name=~\"$container\", name!=\"\"}[1m]))",
@@ -65,14 +106,26 @@
           "refId": "A"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "Bps" } },
-      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      }
     },
     {
       "id": 4,
       "type": "timeseries",
       "title": "Network TX (B/s)",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "sum by (name) (rate(container_network_transmit_bytes_total{name=~\"$container\", name!=\"\"}[1m]))",
@@ -80,36 +133,69 @@
           "refId": "A"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "Bps" } },
-      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        }
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      }
     },
     {
       "id": 5,
       "type": "stat",
       "title": "Containers running",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "count(container_last_seen{name!=\"\"})",
           "refId": "A"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "none" } },
-      "gridPos": { "x": 0, "y": 16, "w": 6, "h": 6 }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 6,
+        "h": 6
+      }
     },
     {
       "id": 6,
       "type": "stat",
       "title": "Total containers RAM",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "sum(container_memory_rss{name!=\"\"})",
           "refId": "A"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "decbytes" } },
-      "gridPos": { "x": 6, "y": 16, "w": 6, "h": 6 }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decbytes"
+        }
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 16,
+        "w": 6,
+        "h": 6
+      }
     }
   ]
 }
