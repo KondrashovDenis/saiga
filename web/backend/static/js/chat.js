@@ -45,8 +45,6 @@
   };
 
   // ───── Markdown (свой, безопасный) ─────
-  // Поддерживаем: # ## ### заголовки, **bold**, *italic*, `code`, ```block```,
-  // - / * списки, [link](url), abзацы.
   const escapeHtml = (s) => s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -55,35 +53,60 @@
     .replace(/'/g, '&#39;');
 
   function renderInline(s) {
-    // inline `code` сначала — чтобы внутри ** не парсилось
     s = s.replace(/`([^`\n]+)`/g, (_, c) => `<code>${escapeHtml(c)}</code>`);
-    // **bold** (greedy non-greedy)
     s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
-    // *italic* / _italic_ — но не звёздочки в списках в начале строки (мы парсим списки выше)
     s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
     s = s.replace(/(^|\W)_([^_\n]+)_(?!\w)/g, '$1<em>$2</em>');
-    // [text](url)
     s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, t, u) =>
       `<a href="${escapeHtml(u)}" target="_blank" rel="noopener">${t}</a>`);
     return s;
   }
 
+  // классификация строки → 'h' | 'ol' | 'ul' | 'code' | 'empty' | 'p'
+  function lineKind(line) {
+    const t = line.trim();
+    if (!t) return 'empty';
+    if (/^CODE\d+$/.test(t)) return 'code';
+    if (/^#{1,4}\s+/.test(t)) return 'h';
+    if (/^\d+\.\s+/.test(t)) return 'ol';
+    if (/^[-*]\s+/.test(t)) return 'ul';
+    return 'p';
+  }
+
   function renderMarkdown(src) {
-    // 1) выделить fenced code blocks (```...```) и временно заменить плейсхолдером
+    // 1) выделить fenced code blocks
     const blocks = [];
     let txt = src.replace(/```(\w+)?\n?([\s\S]*?)```/g, (_, lang, code) => {
       blocks.push(`<pre><code>${escapeHtml(code.replace(/\n+$/, ''))}</code></pre>`);
-      return `CODE${blocks.length - 1}`;
+      return `CODE${blocks.length - 1}`;
     });
 
-    // 2) escape HTML на всём остальном
     txt = escapeHtml(txt);
+    let lines = txt.split('\n');
 
-    // 3) разбираем построчно
-    const lines = txt.split('\n');
+    // 2) схлопнуть пустые строки МЕЖДУ list-item'ами одного типа
+    //    (Saiga часто отдаёт `- a\n\n- b\n\n- c` — это один список без зазоров)
+    const cleaned = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (lineKind(lines[i]) === 'empty') {
+        // ищем ближайшую непустую строку вперёд и назад
+        let prev = cleaned.length ? cleaned[cleaned.length - 1] : '';
+        let next = '';
+        for (let j = i + 1; j < lines.length; j++) {
+          if (lineKind(lines[j]) !== 'empty') { next = lines[j]; break; }
+        }
+        const pk = lineKind(prev), nk = lineKind(next);
+        if ((pk === 'ul' && nk === 'ul') || (pk === 'ol' && nk === 'ol')) {
+          continue; // выкидываем пустую строку внутри списка
+        }
+      }
+      cleaned.push(lines[i]);
+    }
+    lines = cleaned;
+
+    // 3) построчный парсер
     const out = [];
-    let inList = false;
-    let inOL = false;
+    let inUL = false, inOL = false;
     let para = [];
 
     const flushPara = () => {
@@ -93,58 +116,47 @@
       }
     };
     const closeLists = () => {
-      if (inList) { out.push('</ul>'); inList = false; }
-      if (inOL)   { out.push('</ol>'); inOL = false; }
+      if (inUL) { out.push('</ul>'); inUL = false; }
+      if (inOL) { out.push('</ol>'); inOL = false; }
     };
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    for (const line of lines) {
       const trimmed = line.trim();
+      const kind = lineKind(line);
 
-      // placeholder code block — пропускаем без обработки
-      const codeMatch = trimmed.match(/^CODE(\d+)$/);
-      if (codeMatch) {
+      if (kind === 'code') {
         flushPara(); closeLists();
-        out.push(blocks[+codeMatch[1]]);
+        out.push(blocks[+trimmed.slice(4)]);
         continue;
       }
-
-      // headings #, ##, ###
-      const h = trimmed.match(/^(#{1,4})\s+(.+?)\s*#*$/);
-      if (h) {
+      if (kind === 'h') {
         flushPara(); closeLists();
+        const h = trimmed.match(/^(#{1,4})\s+(.+?)\s*#*$/);
         const lvl = h[1].length;
         out.push(`<h${lvl}>${renderInline(h[2])}</h${lvl}>`);
         continue;
       }
-
-      // numbered list "1. item"
-      const ol = trimmed.match(/^(\d+)\.\s+(.+)/);
-      if (ol) {
+      if (kind === 'ol') {
         flushPara();
-        if (inList) { out.push('</ul>'); inList = false; }
+        if (inUL) { out.push('</ul>'); inUL = false; }
         if (!inOL) { out.push('<ol>'); inOL = true; }
-        out.push(`<li>${renderInline(ol[2])}</li>`);
+        const m = trimmed.match(/^\d+\.\s+(.+)/);
+        out.push(`<li>${renderInline(m[1])}</li>`);
         continue;
       }
-
-      // bullet list "- item" / "* item"
-      const ul = trimmed.match(/^[-*]\s+(.+)/);
-      if (ul) {
+      if (kind === 'ul') {
         flushPara();
         if (inOL) { out.push('</ol>'); inOL = false; }
-        if (!inList) { out.push('<ul>'); inList = true; }
-        out.push(`<li>${renderInline(ul[1])}</li>`);
+        if (!inUL) { out.push('<ul>'); inUL = true; }
+        const m = trimmed.match(/^[-*]\s+(.+)/);
+        out.push(`<li>${renderInline(m[1])}</li>`);
         continue;
       }
-
-      // пустая строка → конец параграфа/списка
-      if (!trimmed) {
+      if (kind === 'empty') {
         flushPara(); closeLists();
         continue;
       }
-
-      // прочее — копим в параграф
+      // обычная строка
       closeLists();
       para.push(line);
     }
@@ -156,7 +168,7 @@
   // отрендерить markdown в существующих исторических .msg-content
   document.querySelectorAll('.msg-content').forEach((el) => {
     if (el.dataset.rendered) return;
-    const raw = el.textContent;  // в шаблоне stored as plain text via Jinja escape
+    const raw = el.textContent;
     el.innerHTML = renderMarkdown(raw);
     el.dataset.rendered = '1';
   });
