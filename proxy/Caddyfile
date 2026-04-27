@@ -18,6 +18,7 @@ vaibkod.ru, www.vaibkod.ru {
     encode gzip zstd
     root * /srv/landing
     file_server
+    header Cache-Control "public, max-age=300"
     log {
         output stdout
         format console

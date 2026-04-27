@@ -10,7 +10,7 @@ services:
     env_file: .env
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ../landing:/srv/landing:ro
+      - /home/denciao/projects/vaibkod-landing/site:/srv/landing:ro
       - caddy-data:/data
       - caddy-config:/config
     networks:
