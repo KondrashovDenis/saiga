@@ -129,5 +129,5 @@ def split_for_telegram(text: str, limit: int = MAX_TG_LEN) -> List[str]:
         parts.append(text[:cut].rstrip())
         text = text[cut:].lstrip()
     if text:
-        parts.append(text)
-    return parts
+        parts.append(text.strip())
+    return [p for p in parts if p]

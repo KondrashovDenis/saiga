@@ -39,3 +39,10 @@ llm/llm_benchmark_*.csv
 
 # debug
 llm/debug_script.py
+
+# pytest / coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.ruff_cache/
