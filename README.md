@@ -1,5 +1,7 @@
 # Saiga
 
+![CI](https://github.com/KondrashovDenis/saiga/actions/workflows/ci.yml/badge.svg)
+
 Локальная LLM на базе **Saiga Nemo 12B** (Q4_K_M GGUF) с веб-интерфейсом и Telegram-ботом. Работает на homeserver на 3 GPU через Docker.
 
 ## Архитектура
