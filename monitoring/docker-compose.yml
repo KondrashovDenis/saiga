@@ -1,0 +1,98 @@
+services:
+  # ─────────── Prometheus: time-series база + scrape engine ───────────
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'   # хранить метрики 30 дней
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'              # позволяет POST /-/reload без рестарта
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - monitoring
+    # Не открываем 9090 наружу — доступ только через grafana
+
+  # ─────────── Grafana: визуализация ───────────
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: grafana
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - GF_SERVER_ROOT_URL=https://metrics.vaibkod.ru
+      - GF_USERS_ALLOW_SIGN_UP=false           # запретить регистрацию
+      - GF_AUTH_ANONYMOUS_ENABLED=false        # требуем логин
+      - GF_INSTALL_PLUGINS=                    # доп. плагины не нужны
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - monitoring
+      - nginx-proxy           # чтобы Caddy мог до неё достучаться
+
+  # ─────────── node-exporter: метрики хоста ───────────
+  # Биндит /proc, /sys, / для чтения system stats прямо с хоста.
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: node-exporter
+    restart: unless-stopped
+    command:
+      - '--path.rootfs=/host'
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /:/host:ro,rslave      # rslave — propagation, чтобы видеть mount-ы хоста
+    pid: host
+    networks:
+      - monitoring
+
+  # ─────────── cAdvisor: метрики docker-контейнеров ───────────
+  # Гугловый сборщик: per-container CPU, RAM, IO, network.
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true           # нужен доступ к cgroups
+    devices:
+      - /dev/kmsg               # для чтения kernel log (memory pressure)
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    networks:
+      - monitoring
+
+  # ─────────── DCGM-exporter: NVIDIA GPU метрики ───────────
+  # Использует библиотеку DCGM от NVIDIA для read-only полла GPU.
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.7-3.5.0-ubuntu22.04
+    container_name: dcgm-exporter
+    restart: unless-stopped
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    cap_add:
+      - SYS_ADMIN
+    networks:
+      - monitoring
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  monitoring:
+    name: monitoring
+  nginx-proxy:
+    external: true

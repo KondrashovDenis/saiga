@@ -7,6 +7,24 @@ from flask_login import LoginManager, current_user
 from config import Config
 from database import init_db, db
 
+
+# ────────────── Sentry ──────────────
+# Инициализируем ДО создания Flask app — так FlaskIntegration сможет hook'нуться
+# в роуты при их регистрации. Если SENTRY_DSN не задан — init no-op.
+if Config.SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.flask import FlaskIntegration
+
+    sentry_sdk.init(
+        dsn=Config.SENTRY_DSN,
+        environment=Config.SENTRY_ENV,
+        release=Config.SENTRY_RELEASE,
+        integrations=[FlaskIntegration()],
+        traces_sample_rate=0.1,        # 10% запросов в performance trace
+        send_default_pii=False,        # не шлём username/email юзеров без явного запроса
+    )
+
+
 app = Flask(__name__)
 app.config.from_object(Config)
 
@@ -72,7 +90,6 @@ def inject_sidebar():
              .order_by(Conversation.updated_at.desc())
              .limit(50)
              .all())
-    # active_conversation_id берём из URL если в нём есть /conversations/<id>
     active_id = None
     parts = (request.path or '').strip('/').split('/')
     if len(parts) >= 2 and parts[0] == 'conversations' and parts[1].isdigit():
@@ -91,6 +108,16 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/sentry-debug')
+def trigger_error():
+    """Тестовая точка для проверки что Sentry ловит exceptions.
+    Доступна только если SENTRY_DSN задан и FLASK_DEBUG активен."""
+    if not Config.SENTRY_DSN or not app.debug:
+        return 'disabled', 404
+    division_by_zero = 1 / 0
+    return str(division_by_zero)
+
+
 @app.errorhandler(404)
 def page_not_found(e):
     return render_template('error.html', error_code=404,
@@ -106,5 +133,4 @@ def internal_server_error(e):
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    # gunicorn запускает прод — этот блок только для локалки
     app.run(host='0.0.0.0', port=5000, debug=False)

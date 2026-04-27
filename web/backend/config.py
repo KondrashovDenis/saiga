@@ -35,6 +35,11 @@ class Config:
     TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
     TELEGRAM_BOT_USERNAME = os.environ.get('TELEGRAM_BOT_USERNAME', 'saiga_ai_bot')
 
+    # Sentry — опционально
+    SENTRY_DSN = os.environ.get('SENTRY_DSN')
+    SENTRY_ENV = os.environ.get('SENTRY_ENV', 'production')
+    SENTRY_RELEASE = os.environ.get('SENTRY_RELEASE')
+
     # Лимиты
     MAX_CONVERSATIONS_PER_USER = 50
     MAX_MESSAGES_PER_CONVERSATION = 100

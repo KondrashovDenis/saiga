@@ -1,0 +1,36 @@
+# Prometheus конфиг для homeserver.
+# Скрейпит метрики с экспортеров каждые 15 секунд.
+# Все таргеты — соседние контейнеры в docker network monitoring.
+
+global:
+  scrape_interval: 15s          # как часто опрашивать таргеты
+  evaluation_interval: 15s      # как часто пересчитывать alert rules (rules не используем)
+  external_labels:
+    monitor: 'saiga-homeserver' # подставляется ко всем метрикам
+
+scrape_configs:
+  # Сам Prometheus экспортит свои внутренние метрики
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Метрики хоста homeserver: CPU, RAM, disk, network, load avg
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          host: 'homeserver'
+
+  # Метрики docker-контейнеров: per-container CPU/RAM/IO
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+        labels:
+          host: 'homeserver'
+
+  # Метрики GPU NVIDIA: utilization, memory, power, temp, ECC
+  - job_name: 'dcgm'
+    static_configs:
+      - targets: ['dcgm-exporter:9400']
+        labels:
+          host: 'homeserver'

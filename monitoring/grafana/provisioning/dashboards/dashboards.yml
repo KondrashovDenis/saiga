@@ -1,0 +1,14 @@
+# Grafana dashboards provisioning.
+# Любой *.json из /var/lib/grafana/dashboards/ подхватится автоматом.
+apiVersion: 1
+
+providers:
+  - name: 'saiga-default'
+    orgId: 1
+    folder: ''                 # без папки в UI — будут в корне
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30  # перечитывать раз в 30с (для удобства правок)
+    allowUiUpdates: true       # разрешим editing в UI (изменения уйдут в файл)
+    options:
+      path: /var/lib/grafana/dashboards

@@ -33,3 +33,4 @@ SpeechRecognition==3.10.0
 
 # PostgreSQL driver
 psycopg2-binary==2.9.9
+sentry-sdk[flask]==2.18.0

@@ -40,6 +40,11 @@ class Config:
     # Redis (локальный sidecar в docker compose)
     REDIS_URL = os.getenv('REDIS_URL', 'redis://saiga-bot-redis:6379/0')
 
+    # Sentry — опционально (если DSN не задан, инициализация скипается)
+    SENTRY_DSN = os.getenv('SENTRY_DSN')
+    SENTRY_ENV = os.getenv('SENTRY_ENV', 'production')
+    SENTRY_RELEASE = os.getenv('SENTRY_RELEASE')  # обычно git sha / тег версии
+
     # Paths
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     DATA_DIR = '/app/data'
