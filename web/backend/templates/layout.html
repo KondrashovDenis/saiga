@@ -3,104 +3,115 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Saiga LLM Chat{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <title>{% block title %}Saiga{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
-        <div class="container">
-            <a class="navbar-brand" href="{{ url_for('index') }}">
-                <i class="fas fa-brain me-2"></i>Saiga LLM
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}">
-                            <i class="fas fa-home me-1"></i>Главная
-                        </a>
-                    </li>
-                    {% if current_user.is_authenticated %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('conversations.list') }}">
-                            <i class="fas fa-comments me-1"></i>Мои диалоги
-                        </a>
-                    </li>
-                    {% endif %}
-                </ul>
-                <ul class="navbar-nav">
-                    <li class="nav-item me-2">
-                        <button class="theme-toggle" id="themeToggle" title="Переключить тему">
-                            <i class="fas fa-moon"></i>
-                        </button>
-                    </li>
-                    {% if current_user.is_authenticated %}
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
-                            <div class="user-avatar me-2">
-                                {{ ((current_user.username[0] if current_user.username else current_user.email[0] if current_user.email else "U").upper()) if current_user.username else current_user.email[0].upper() if current_user.email else "U" }}
-                            </div>
-                            {{ current_user.display_name }}
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li><a class="dropdown-item" href="{{ url_for('settings.user_settings') }}">
-                                <i class="fas fa-cog me-2"></i>Настройки
-                            </a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">
-                                <i class="fas fa-sign-out-alt me-2"></i>Выйти
-                            </a></li>
-                        </ul>
-                    </li>
-                    {% else %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('auth.login') }}">
-                            <i class="fas fa-sign-in-alt me-1"></i>Войти
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('auth.register') }}">
-                            <i class="fas fa-user-plus me-1"></i>Регистрация
-                        </a>
-                    </li>
-                    {% endif %}
-                </ul>
-            </div>
-        </div>
-    </nav>
 
-    <div class="container">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-            {% endfor %}
-        {% endif %}
-        {% endwith %}
+{% set is_simple = simple_layout|default(false) or not current_user.is_authenticated %}
 
-        {% block content %}{% endblock %}
+<div class="flash-wrap">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <div class="flash {{ category }}">
+                <span>{{ message }}</span>
+                <button class="flash-close" onclick="this.parentElement.remove()">×</button>
+            </div>
+        {% endfor %}
+    {% endwith %}
+</div>
+
+{% if is_simple %}
+    <div class="simple-layout">
+        {% block simple %}{% endblock %}
     </div>
-
-    <footer class="mt-5 py-3 bg-light">
-        <div class="container text-center">
-            <p class="text-muted mb-0">
-                <i class="fas fa-robot me-1"></i>
-                Saiga LLM Chat &copy; {{ now.year }}
-            </p>
+{% else %}
+<div class="app">
+    {# ═══════ SIDEBAR ═══════ #}
+    <aside class="sidebar" id="sidebar">
+        <div class="sb-head">
+            <a href="{{ url_for('index') }}" class="sb-brand">
+                <span class="dot"></span>
+                <span>saiga</span>
+            </a>
+            <a href="{{ url_for('conversations.new') }}" class="sb-newchat">
+                <span class="plus">+</span>
+                <span>Новый диалог</span>
+            </a>
         </div>
-    </footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
-    
-    {% block scripts %}{% endblock %}
+        <div class="sb-list">
+            {% if sidebar_conversations is defined and sidebar_conversations %}
+                <div class="sb-list-label">Диалоги</div>
+                {% for c in sidebar_conversations %}
+                <a href="{{ url_for('conversations.view', conversation_id=c.id) }}"
+                   class="sb-conv {% if active_conversation_id is defined and active_conversation_id == c.id %}active{% endif %}"
+                   title="{{ c.title }}">
+                    <span class="sb-conv-title">{{ c.title }}</span>
+                </a>
+                {% endfor %}
+            {% else %}
+                <div class="sb-empty">Здесь будут ваши диалоги</div>
+            {% endif %}
+        </div>
+
+        <div class="sb-foot">
+            <div class="sb-menu" id="userMenu">
+                <a href="{{ url_for('settings.user_settings') }}">
+                    <span>⚙</span> <span>Настройки</span>
+                </a>
+                <hr>
+                <a href="{{ url_for('auth.logout') }}">
+                    <span>↪</span> <span>Выйти</span>
+                </a>
+            </div>
+            <button class="sb-account" id="userMenuToggle" type="button">
+                <div class="sb-avatar">
+                    {%- set u = current_user -%}
+                    {%- if u.first_name -%}{{ u.first_name[0]|upper }}
+                    {%- elif u.username -%}{{ u.username[0]|upper }}
+                    {%- elif u.email -%}{{ u.email[0]|upper }}
+                    {%- else -%}U{%- endif -%}
+                </div>
+                <div class="sb-account-name">{{ current_user.display_name }}</div>
+                <span class="sb-account-arrow">▾</span>
+            </button>
+        </div>
+    </aside>
+
+    {# ═══════ MAIN ═══════ #}
+    <section class="main">
+        <button class="menu-toggle" id="menuToggle" type="button">☰</button>
+        {% block content %}{% endblock %}
+    </section>
+</div>
+
+<script>
+// User menu (бургер аккаунта)
+(function(){
+  var t = document.getElementById('userMenuToggle');
+  var m = document.getElementById('userMenu');
+  if (t && m) {
+    t.addEventListener('click', function(e){
+      e.stopPropagation();
+      m.classList.toggle('open');
+    });
+    document.addEventListener('click', function(){ m.classList.remove('open'); });
+    m.addEventListener('click', function(e){ e.stopPropagation(); });
+  }
+})();
+// Mobile sidebar toggle
+(function(){
+  var t = document.getElementById('menuToggle');
+  var s = document.getElementById('sidebar');
+  if (t && s) {
+    t.addEventListener('click', function(){ s.classList.toggle('open'); });
+  }
+})();
+</script>
+{% endif %}
+
+{% block scripts %}{% endblock %}
 </body>
 </html>

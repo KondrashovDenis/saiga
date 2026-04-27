@@ -1,51 +1,9 @@
 {% extends 'layout.html' %}
-
-{% block title %}Мои диалоги{% endblock %}
-
+{% block title %}Диалоги{% endblock %}
 {% block content %}
-<div class="row mb-4">
-    <div class="col-md-8">
-        <h1>Мои диалоги</h1>
-    </div>
-    <div class="col-md-4 text-end">
-        <a href="{{ url_for('conversations.new') }}" class="btn btn-success">
-            <i class="fas fa-plus-circle me-2"></i> Новый диалог
-        </a>
-    </div>
+<div class="empty-state">
+    <h1>Все диалоги слева</h1>
+    <p>{% if conversations %}Выберите диалог в списке слева или создайте новый.{% else %}У вас пока нет диалогов — начните первый.{% endif %}</p>
+    <a href="{{ url_for('conversations.new') }}" class="btn">+ Новый диалог</a>
 </div>
-
-{% if conversations %}
-<div class="row">
-    <div class="col-12">
-        <div class="list-group">
-            {% for conversation in conversations %}
-            <a href="{{ url_for('conversations.view', conversation_id=conversation.id) }}" 
-               class="list-group-item list-group-item-action">
-                <div class="d-flex w-100 justify-content-between">
-                    <h5 class="mb-1">{{ conversation.title }}</h5>
-                    <small>{{ conversation.updated_at.strftime('%d.%m.%Y %H:%M') }}</small>
-                </div>
-                {% if conversation.is_shared %}
-                <p class="mb-1">
-                    <span class="badge bg-info">
-                        <i class="fas fa-share-alt me-1"></i> Опубликован
-                    </span>
-                </p>
-                {% endif %}
-                <small>Модель: {{ conversation.model_used or 'saiga' }}</small>
-            </a>
-            {% endfor %}
-        </div>
-    </div>
-</div>
-{% else %}
-<div class="alert alert-info">
-    <p class="mb-0">У вас пока нет диалогов. Начните новый диалог, чтобы задать вопрос модели Saiga.</p>
-</div>
-<div class="text-center mt-4">
-    <a href="{{ url_for('conversations.new') }}" class="btn btn-primary btn-lg">
-        <i class="fas fa-comments me-2"></i> Начать диалог
-    </a>
-</div>
-{% endif %}
 {% endblock %}

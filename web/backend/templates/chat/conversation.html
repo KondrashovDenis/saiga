@@ -1,151 +1,99 @@
 {% extends 'layout.html' %}
-
 {% block title %}{{ conversation.title }}{% endblock %}
-
 {% block content %}
-<div class="row mb-3">
-    <div class="col-md-8">
-        <h1><i class="fas fa-comments me-2"></i>{{ conversation.title }}</h1>
+
+<div class="main-head">
+    <div class="main-title">{{ conversation.title }}</div>
+    {% if is_owner %}
+    <div class="main-actions">
+        <button class="icon-btn" id="shareBtn" title="Поделиться">↗</button>
+        <button class="icon-btn danger" onclick="document.getElementById('deleteModal').classList.add('open')" title="Удалить">×</button>
     </div>
-    <div class="col-md-4 text-end">
-        {% if is_owner %}
-        <div class="btn-group" role="group">
-            <button id="shareBtn" class="btn btn-outline-primary">
-                <i class="fas fa-share-alt me-2"></i>Поделиться
-            </button>
-            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
-                <i class="fas fa-trash me-2"></i>Удалить
-            </button>
-        </div>
-        {% endif %}
-    </div>
+    {% endif %}
 </div>
 
-<div class="chat-container" data-conversation-id="{{ conversation.id }}">
-    <div class="chat-messages" id="chatMessages">
-        {% for message in messages %}
-        <div class="message " style="position: relative; message-{{ message.role }}">
-            <div class="message-header">
-                <div class="message-avatar avatar-{{ message.role }}">
-                    {% if message.role == 'user' %}
-                        {{ ((current_user.username[0] if current_user.username else current_user.email[0] if current_user.email else "U").upper()) if current_user.is_authenticated else 'Вы' }}
-                    {% else %}
-                        AI
-                    {% endif %}
+<div class="chat">
+    <div class="chat-stream" id="chatStream">
+        <div class="chat-stream-inner" id="chatMessages" data-conversation-id="{{ conversation.id }}">
+            {% for message in messages %}
+            <div class="msg" data-role="{{ message.role }}">
+                <div class="msg-avatar {{ message.role }}">
+                    {%- if message.role == 'user' -%}
+                        {%- if current_user.first_name -%}{{ current_user.first_name[0]|upper }}
+                        {%- elif current_user.username -%}{{ current_user.username[0]|upper }}
+                        {%- elif current_user.email -%}{{ current_user.email[0]|upper }}
+                        {%- else -%}U{%- endif -%}
+                    {%- else -%}S{%- endif -%}
                 </div>
-                <span class="message-timestamp" style="font-size: 0.75rem; color: #888; position: absolute; top: 5px; right: 10px;">{{ message.timestamp.strftime('%H:%M') }}</span>
+                <div class="msg-body">
+                    <div class="msg-role">{% if message.role == 'user' %}Вы{% else %}Saiga{% endif %} · {{ message.timestamp.strftime('%H:%M') }}</div>
+                    <div class="msg-content">{{ message.content }}</div>
+                </div>
             </div>
-            <div class="message-content">
-                {{ message.content|nl2br }}
-        {% if user_settings and user_settings.show_timestamps %}
-        <div class="message-timestamp" style="font-size: 0.75rem; color: #888; position: absolute; top: 5px; right: 10px;">{{ message.timestamp.strftime("%H:%M") }}</div>
-        {% endif %}
-            </div>
-            {% if message.role == 'assistant' and is_owner %}
-            <div class="message-reactions">
-                <button class="reaction-btn" data-reaction="👍">👍</button>
-                <button class="reaction-btn" data-reaction="👎">👎</button>
-                <button class="reaction-btn" data-reaction="🤔">🤔</button>
-                <button class="reaction-btn" data-reaction="❤️">❤️</button>
-            </div>
-            {% endif %}
+            {% endfor %}
         </div>
-        {% endfor %}
     </div>
-    
+
     {% if is_owner %}
     <div class="quick-replies" id="quickReplies">
-        <button class="quick-reply-btn">Продолжи</button>
-        <button class="quick-reply-btn">Поясни подробнее</button>
-        <button class="quick-reply-btn">Дай пример</button>
-        <button class="quick-reply-btn">Что это значит?</button>
-        <button class="quick-reply-btn">Как это работает?</button>
+        <button class="qr-btn" type="button">Продолжи</button>
+        <button class="qr-btn" type="button">Поясни подробнее</button>
+        <button class="qr-btn" type="button">Дай пример</button>
+        <button class="qr-btn" type="button">Что это значит?</button>
     </div>
-    
-    <div class="chat-input">
-        <form id="messageForm">
-            <div class="input-group">
-                <textarea class="form-control" id="messageInput" rows="2" 
-                          placeholder="Введите сообщение..." required></textarea>
-                <button class="btn btn-outline-secondary" type="button" id="fileUploadBtn" title="Прикрепить файл">
-                    <i class="fas fa-paperclip"></i>
-                </button>
-                <button class="btn btn-primary" type="submit">
-                    <i class="fas fa-paper-plane"></i>
-                </button>
-                <input type="file" id="fileInput" class="d-none" accept=".txt,.pdf,.docx,.md">
-            </div>
-            <div class="input-help">
-                <small class="text-muted">
-                    <i class="fas fa-info-circle me-1"></i>
-                    Поддерживается **жирный текст**, *курсив*, `код`. Ctrl+Enter для отправки
-                </small>
-            </div>
-        </form>
+    <div class="composer">
+        <div class="composer-inner">
+            <form id="messageForm">
+                <div class="composer-box">
+                    <textarea id="messageInput" rows="1" placeholder="Сообщение для Saiga…" required></textarea>
+                    <button type="button" class="composer-action" id="fileUploadBtn" title="Прикрепить файл">⎙</button>
+                    <button type="submit" class="composer-send" id="sendBtn" title="Отправить">↑</button>
+                    <input type="file" id="fileInput" hidden accept=".txt,.pdf,.docx,.md">
+                </div>
+                <div class="composer-help">Enter — отправить · Shift+Enter — новая строка</div>
+            </form>
+        </div>
     </div>
     {% else %}
-    <div class="alert alert-info mb-0">
-        <i class="fas fa-info-circle me-2"></i>
-        Вы просматриваете опубликованный диалог. Только владелец может добавлять сообщения.
+    <div class="composer">
+        <div class="composer-inner" style="text-align:center; color: var(--tx-muted); font-size: 14px;">
+            Вы просматриваете опубликованный диалог.
+        </div>
     </div>
     {% endif %}
 </div>
 
 {% if is_owner %}
-<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="deleteModalLabel">
-                    <i class="fas fa-exclamation-triangle me-2"></i>Подтверждение удаления
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>Вы уверены, что хотите удалить этот диалог?</p>
-                <p class="text-danger">
-                    <i class="fas fa-warning me-1"></i>
-                    <strong>Внимание:</strong> это действие нельзя отменить!
-                </p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                <form action="{{ url_for('conversations.delete', conversation_id=conversation.id) }}" method="POST" style="display: inline;">
-                    <button type="submit" class="btn btn-danger">
-                        <i class="fas fa-trash me-1"></i>Удалить
-                    </button>
-                </form>
-            </div>
+<div class="modal-back" id="deleteModal">
+    <div class="modal">
+        <h2>Удалить диалог?</h2>
+        <p>Действие нельзя отменить.</p>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="document.getElementById('deleteModal').classList.remove('open')">Отмена</button>
+            <form action="{{ url_for('conversations.delete', conversation_id=conversation.id) }}" method="POST">
+                <button type="submit" class="btn btn-danger">Удалить</button>
+            </form>
         </div>
     </div>
 </div>
 
-<div class="modal fade" id="shareModal" tabindex="-1" aria-labelledby="shareModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="shareModalLabel">
-                    <i class="fas fa-share-alt me-2"></i>Поделиться диалогом
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>Используйте эту ссылку, чтобы поделиться диалогом:</p>
-                <div class="input-group mb-3">
-                    <input type="text" class="form-control" id="shareLink" readonly>
-                    <button class="btn btn-outline-secondary" type="button" id="copyBtn">
-                        <i class="fas fa-copy"></i>
-                    </button>
-                </div>
-                <div class="alert alert-success d-none" id="copySuccess">
-                    <i class="fas fa-check me-2"></i>Ссылка скопирована в буфер обмена!
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
-            </div>
+<div class="modal-back" id="shareModal">
+    <div class="modal">
+        <h2>Поделиться диалогом</h2>
+        <p>Скопируйте ссылку и отправьте:</p>
+        <div class="field">
+            <input type="text" id="shareLink" readonly>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="document.getElementById('shareModal').classList.remove('open')">Закрыть</button>
+            <button type="button" class="btn" id="copyBtn">Скопировать</button>
         </div>
     </div>
 </div>
 {% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
 {% endblock %}

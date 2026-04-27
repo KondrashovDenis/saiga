@@ -1,611 +1,224 @@
-/**
- * Основные функции для работы с чатом
- */
+// chat.js — редизайн под новый layout (.msg, .msg-content, .modal-back и т.д.)
 
-class ChatHandler {
-    constructor(options) {
-        this.conversationId = options.conversationId;
-        this.messageContainer = document.getElementById(options.messageContainerId || 'chatMessages');
-        this.messageForm = document.getElementById(options.messageFormId || 'messageForm');
-        this.messageInput = document.getElementById(options.messageInputId || 'messageInput');
-        this.typingIndicator = null;
-        
-        this.apiEndpoints = {
-            messages: `/api/conversations/${this.conversationId}/messages`,
-            generate: `/api/llm/generate`
-        };
-        
-        this.init();
-    }
-    
-    /**
-     * Инициализация обработчиков событий
-     */
-    init() {
-        this.scrollToBottom();
-        
-        if (this.messageForm) {
-            this.messageForm.addEventListener('submit', this.handleSubmit.bind(this));
-        }
-        
-        if (this.messageInput) {
-            this.messageInput.addEventListener('keydown', (e) => {
-                if (e.ctrlKey && e.key === 'Enter') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    this.handleSubmit(e);
-                }
-            });
-        }
-        
-        this.initQuickReplies();
-        this.initMessageReactions();
-    }
-    
-    /**
-     * Инициализация быстрых ответов
-     */
-    initQuickReplies() {
-        const quickRepliesContainer = document.getElementById('quickReplies');
-        if (quickRepliesContainer) {
-            quickRepliesContainer.addEventListener('click', (e) => {
-                if (e.target.classList.contains('quick-reply-btn')) {
-                    const text = e.target.textContent;
-                    this.messageInput.value = text;
-                    this.messageInput.focus();
-                }
-            });
-        }
-    }
-    
-    /**
-     * Инициализация реакций на сообщения
-     */
-    initMessageReactions() {
-        this.messageContainer.addEventListener('click', (e) => {
-            if (e.target.classList.contains('reaction-btn')) {
-                e.target.classList.toggle('active');
-                // Здесь можно добавить отправку реакции на сервер
-            }
-        });
-    }
-    
-    /**
-     * Обработка отправки сообщения
-     */
-    handleSubmit(e) {
+(function () {
+  // ───── DOM ─────
+  const stream = document.getElementById('chatStream');
+  const messages = document.getElementById('chatMessages');
+  const form = document.getElementById('messageForm');
+  const input = document.getElementById('messageInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const quickReplies = document.getElementById('quickReplies');
+  const fileBtn = document.getElementById('fileUploadBtn');
+  const fileInput = document.getElementById('fileInput');
+  const shareBtn = document.getElementById('shareBtn');
+  const copyBtn = document.getElementById('copyBtn');
+
+  if (!messages) return;
+
+  const conversationId = messages.dataset.conversationId;
+  const userInitial = (function () {
+    const a = document.querySelector('.sb-avatar');
+    return a ? a.textContent.trim() : 'U';
+  })();
+
+  // ───── Авторазмер textarea ─────
+  if (input) {
+    const autosize = () => {
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+    };
+    input.addEventListener('input', autosize);
+    autosize();
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        e.stopPropagation();
-        
-        const message = this.messageInput.value.trim();
-        if (!message) return;
-        
-        // Блокируем повторную отправку
-        if (this.typingIndicator) {
-            return;
-        }
-        
-        this.addMessage('user', message);
-        this.messageInput.value = '';
-        this.showTypingIndicator();
-        
-        this.sendMessage(message)
-            .then(() => this.generateResponse(message))
-            .catch(error => {
-                console.error('Error sending message:', error);
-                this.hideTypingIndicator();
-                this.showErrorMessage('Ошибка при отправке сообщения');
-            });
-    }
-    
-    /**
-     * Отправка сообщения на сервер
-     */
-    sendMessage(message) {
-        return fetch(this.apiEndpoints.messages, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ content: message })
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-        });
-    }
-    
-    /**
-     * Запрос генерации ответа от LLM
-     */
-    generateResponse(message) {
-        return fetch(this.apiEndpoints.generate, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                conversation_id: this.conversationId,
-                message: message
-            })
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            this.hideTypingIndicator();
-            this.addMessage('assistant', data.message);
-        })
-        .catch(error => {
-            console.error('Error generating response:', error);
-            this.hideTypingIndicator();
-            this.showErrorMessage('Ошибка при получении ответа от модели');
-        });
-    }
-    
-    /**
-     * Добавление сообщения в чат
-     */
-    addMessage(role, content) {
-        const messageElement = document.createElement('div');
-        messageElement.className = `message message-${role} fade-in`;
-        
-        const timestamp = new Date().toLocaleTimeString('ru-RU', {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-        
-        const avatarHtml = this.createAvatar(role);
-        const reactionsHtml = role === 'assistant' ? this.createReactions() : '';
-        const markdownContent = this.renderMarkdown(content);
-        
-        messageElement.innerHTML = `
-            <div class="message-header">
-                ${avatarHtml}
-                <span class="message-timestamp">${timestamp}</span>
-            </div>
-            <div class="message-content">
-                ${markdownContent}
-            </div>
-            ${reactionsHtml}
-        `;
-        
-        this.messageContainer.appendChild(messageElement);
-        this.scrollToBottom();
-        
-        if (role === 'assistant') {
-            this.showQuickReplies();
-        }
-    }
-    
-    /**
-     * Создание аватара
-     */
-    createAvatar(role) {
-        const isUser = role === 'user';
-        const initials = isUser ? 'Вы' : 'AI';
-        const className = `message-avatar avatar-${role}`;
-        
-        return `<div class="${className}">${initials}</div>`;
-    }
-    
-    /**
-     * Создание реакций
-     */
-    createReactions() {
-        const reactions = ['👍', '👎', '🤔', '❤️'];
-        return `
-            <div class="message-reactions">
-                ${reactions.map(emoji => 
-                    `<button class="reaction-btn" data-reaction="${emoji}">${emoji}</button>`
-                ).join('')}
-            </div>
-        `;
-    }
-    
-    /**
-     * Простой рендеринг Markdown
-     */
-    renderMarkdown(content) {
-        return content
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/`(.*?)`/g, '<code>$1</code>')
-            .replace(/\n/g, '<br>');
-    }
-    
-    /**
-     * Показать быстрые ответы
-     */
-    showQuickReplies() {
-        const quickReplies = document.getElementById('quickReplies');
-        if (quickReplies) {
-            quickReplies.style.display = 'flex';
-        }
-    }
-    
-    /**
-     * Создать и показать индикатор печати
-     */
-    showTypingIndicator() {
-        // Удаляем предыдущий индикатор, если есть
-        this.hideTypingIndicator();
-        
-        // Создаем новый индикатор печати
-        this.typingIndicator = document.createElement('div');
-        this.typingIndicator.className = 'message message-assistant typing-indicator fade-in';
-        this.typingIndicator.innerHTML = `
-            <div class="message-header">
-                <div class="message-avatar avatar-assistant">AI</div>
-                <span class="message-timestamp">печатает...</span>
-            </div>
-            <div class="message-content">
-                <div class="typing-dots">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </div>
-            </div>
-        `;
-        
-        this.messageContainer.appendChild(this.typingIndicator);
-        this.scrollToBottom();
-    }
-    
-    /**
-     * Скрыть индикатор печати
-     */
-    hideTypingIndicator() {
-        if (this.typingIndicator) {
-            this.typingIndicator.remove();
-            this.typingIndicator = null;
-        }
-    }
-    
-    /**
-     * Показать сообщение об ошибке
-     */
-    showErrorMessage(errorText) {
-        const errorElement = document.createElement('div');
-        errorElement.className = 'alert alert-danger mt-3 fade-in';
-        errorElement.textContent = errorText;
-        
-        this.messageContainer.appendChild(errorElement);
-        this.scrollToBottom();
-        
-        setTimeout(() => {
-            errorElement.remove();
-        }, 5000);
-    }
-    
-    /**
-     * Прокрутка чата вниз
-     */
-    scrollToBottom() {
-        if (this.messageContainer) {
-            this.messageContainer.scrollTo({
-                top: this.messageContainer.scrollHeight,
-                behavior: 'smooth'
-            });
-        }
-    }
-}
+        form.requestSubmit();
+      }
+    });
+  }
 
-/**
- * Управление темами
- */
-class ThemeManager {
-    constructor() {
-        this.currentTheme = this.getStoredTheme() || this.getSystemTheme();
-        this.init();
-    }
-    
-    init() {
-        this.applyTheme(this.currentTheme);
-        this.initThemeToggle();
-    }
-    
-    getSystemTheme() {
-        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }
-    
-    getStoredTheme() {
-        return localStorage.getItem('theme');
-    }
-    
-    applyTheme(theme) {
-        document.documentElement.setAttribute('data-theme', theme);
-        this.updateThemeToggle(theme);
-        this.saveTheme(theme);
-    }
-    
-    saveTheme(theme) {
-        localStorage.setItem('theme', theme);
-        
-        // Отправляем на сервер для сохранения в профиле
-        fetch('/settings/theme', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ theme: theme })
-        }).catch(error => console.warn('Failed to save theme to server:', error));
-    }
-    
-    toggleTheme() {
-        const newTheme = this.currentTheme === 'light' ? 'dark' : 'light';
-        this.currentTheme = newTheme;
-        this.applyTheme(newTheme);
-    }
-    
-    updateThemeToggle(theme) {
-        const toggle = document.getElementById('themeToggle');
-        if (toggle) {
-            const icon = toggle.querySelector('i');
-            if (icon) {
-                icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-            }
-        }
-    }
-    
-    initThemeToggle() {
-        const toggle = document.getElementById('themeToggle');
-        if (toggle) {
-            toggle.addEventListener('click', () => this.toggleTheme());
-        }
-        
-        // Слушаем изменения системной темы
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-            if (!this.getStoredTheme()) {
-                this.currentTheme = e.matches ? 'dark' : 'light';
-                this.applyTheme(this.currentTheme);
-            }
-        });
-    }
-}
+  // ───── Скролл ─────
+  const scrollDown = () => {
+    if (stream) stream.scrollTop = stream.scrollHeight;
+  };
+  scrollDown();
 
-/**
- * Обработчик общих действий для диалогов
- */
-class ConversationManager {
-    constructor(conversationId) {
-        this.conversationId = conversationId;
-        this.shareBtn = document.getElementById('shareBtn');
-        this.copyBtn = document.getElementById('copyBtn');
-        
-        this.init();
-    }
-    
-    init() {
-        if (this.shareBtn) {
-            this.shareBtn.addEventListener('click', this.handleShare.bind(this));
-        }
-        
-        if (this.copyBtn) {
-            this.copyBtn.addEventListener('click', this.handleCopy.bind(this));
-        }
-    }
-    
-    handleShare() {
-        fetch(`/conversations/${this.conversationId}/share`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            document.getElementById('shareLink').value = data.shareUrl;
-            const shareModal = new bootstrap.Modal(document.getElementById('shareModal'));
-            shareModal.show();
-        })
-        .catch(error => {
-            console.error('Error sharing conversation:', error);
-            alert('Не удалось создать ссылку для шаринга.');
-        });
-    }
-    
-    handleCopy() {
-        const shareLink = document.getElementById('shareLink');
-        shareLink.select();
-        navigator.clipboard.writeText(shareLink.value);
-        
-        const copySuccess = document.getElementById('copySuccess');
-        copySuccess.classList.remove('d-none');
-        
-        setTimeout(() => {
-            copySuccess.classList.add('d-none');
-        }, 3000);
-    }
-}
+  // ───── Markdown lite ─────
+  const escapeHtml = (s) => s
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const md = (s) => escapeHtml(s)
+    .replace(/```([\s\S]*?)```/g, (_, code) => `<pre><code>${code.trim()}</code></pre>`)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
 
-// Инициализация при загрузке страницы
-document.addEventListener('DOMContentLoaded', function() {
-    // Инициализируем менеджер тем
-    new ThemeManager();
-    
-    // Получаем ID диалога из элемента данных или из URL
-    const conversationElement = document.querySelector('[data-conversation-id]');
-    if (conversationElement) {
-        const conversationId = conversationElement.dataset.conversationId;
-        
-        // Инициализируем обработчик чата
-        const chatHandler = new ChatHandler({
-            conversationId: conversationId,
-            messageContainerId: 'chatMessages',
-            messageFormId: 'messageForm',
-            messageInputId: 'messageInput'
-        });
-        
-        // Инициализируем менеджер диалогов
-        const conversationManager = new ConversationManager(conversationId);
-    }
-});
+  const now = () => {
+    const d = new Date();
+    return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  };
 
-// Обработка загрузки файлов
-document.addEventListener('DOMContentLoaded', function() {
-    const fileUploadBtn = document.getElementById('fileUploadBtn');
-    const fileInput = document.getElementById('fileInput');
-    
-    if (fileUploadBtn && fileInput) {
-        fileUploadBtn.addEventListener('click', function() {
-            fileInput.click();
-        });
-        
-        fileInput.addEventListener('change', function(e) {
-            if (e.target.files.length > 0) {
-                uploadFile(e.target.files[0]);
-            }
-        });
-    }
-});
+  // ───── Добавить сообщение ─────
+  function appendMessage(role, content) {
+    const el = document.createElement('div');
+    el.className = 'msg';
+    el.dataset.role = role;
+    const initial = role === 'user' ? userInitial : 'S';
+    const roleLabel = role === 'user' ? 'Вы' : 'Saiga';
+    el.innerHTML = `
+      <div class="msg-avatar ${role}">${escapeHtml(initial)}</div>
+      <div class="msg-body">
+        <div class="msg-role">${roleLabel} · ${now()}</div>
+        <div class="msg-content">${md(content)}</div>
+      </div>`;
+    messages.appendChild(el);
+    scrollDown();
+  }
 
-function uploadFile(file) {
-    const conversationId = document.querySelector('[data-conversation-id]').dataset.conversationId;
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('conversation_id', conversationId);
-    
-    fetch('/api/files/upload', {
+  function appendTyping() {
+    const el = document.createElement('div');
+    el.className = 'msg msg-typing';
+    el.id = 'typingMsg';
+    el.innerHTML = `
+      <div class="msg-avatar assistant">S</div>
+      <div class="msg-body">
+        <div class="msg-role">Saiga · печатает</div>
+        <div class="msg-content">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        </div>
+      </div>`;
+    messages.appendChild(el);
+    scrollDown();
+  }
+
+  function removeTyping() {
+    const el = document.getElementById('typingMsg');
+    if (el) el.remove();
+  }
+
+  function showError(text) {
+    const el = document.createElement('div');
+    el.className = 'msg';
+    el.style.color = 'var(--danger)';
+    el.innerHTML = `<div class="msg-avatar" style="background:var(--danger); color:#fff;">!</div>
+                    <div class="msg-body"><div class="msg-content">${escapeHtml(text)}</div></div>`;
+    messages.appendChild(el);
+    scrollDown();
+    setTimeout(() => el.remove(), 8000);
+  }
+
+  // ───── Send ─────
+  let busy = false;
+  async function send(text) {
+    if (busy) return;
+    if (!text.trim()) return;
+    busy = true;
+    if (sendBtn) sendBtn.disabled = true;
+
+    appendMessage('user', text);
+    input.value = '';
+    input.style.height = 'auto';
+    appendTyping();
+
+    try {
+      const r1 = await fetch(`/api/conversations/${conversationId}/messages`, {
         method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text })
+      });
+      if (!r1.ok) throw new Error('Не удалось сохранить сообщение');
+
+      const r2 = await fetch('/api/llm/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversation_id: conversationId, message: text })
+      });
+      const data = await r2.json();
+      removeTyping();
+      if (!r2.ok) {
+        showError(data.error || 'Ошибка генерации');
+      } else {
+        appendMessage('assistant', data.message);
+      }
+    } catch (e) {
+      removeTyping();
+      showError('Сеть: ' + e.message);
+    } finally {
+      busy = false;
+      if (sendBtn) sendBtn.disabled = false;
+      input.focus();
+    }
+  }
+
+  if (form) {
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      send(input.value);
+    });
+  }
+
+  // ───── Quick replies ─────
+  if (quickReplies) {
+    quickReplies.addEventListener('click', (e) => {
+      if (e.target.classList.contains('qr-btn')) {
+        input.value = e.target.textContent;
+        input.focus();
+      }
+    });
+  }
+
+  // ───── File upload ─────
+  if (fileBtn && fileInput) {
+    fileBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('conversation_id', conversationId);
+      try {
+        const r = await fetch('/api/files/upload', { method: 'POST', body: fd });
+        const data = await r.json();
         if (data.extracted_text) {
-            addMessage('user', `📄 ${file.name}:\n\n${data.extracted_text}`);
-            generateResponseFromFile(data.extracted_text, file.name);
+          await send(`📄 ${file.name}:\n\n${data.extracted_text}`);
         } else {
-            showErrorMessage(data.error || 'Ошибка обработки файла');
+          showError(data.error || 'Не удалось обработать файл');
         }
-    })
-    .catch(error => {
-        console.error('Ошибка загрузки файла:', error);
-        showErrorMessage('Ошибка загрузки файла');
+      } catch (err) {
+        showError('Загрузка файла: ' + err.message);
+      }
+      fileInput.value = '';
     });
-}
+  }
 
-function generateResponseFromFile(text, filename) {
-    const conversationId = document.querySelector('[data-conversation-id]').dataset.conversationId;
-    const prompt = `Проанализируй содержимое файла "${filename}":\n\n${text}`;
-    
-    showTypingIndicator();
-    
-    fetch('/api/llm/generate', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            conversation_id: conversationId,
-            message: prompt
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        hideTypingIndicator();
-        addMessage('assistant', data.message);
-    })
-    .catch(error => {
-        console.error('Ошибка генерации ответа:', error);
-        hideTypingIndicator();
-        showErrorMessage('Ошибка получения ответа от модели');
+  // ───── Share ─────
+  if (shareBtn) {
+    shareBtn.addEventListener('click', async () => {
+      try {
+        const r = await fetch(`/conversations/${conversationId}/share`, { method: 'POST' });
+        const data = await r.json();
+        document.getElementById('shareLink').value = data.shareUrl;
+        document.getElementById('shareModal').classList.add('open');
+      } catch (e) {
+        showError('Не удалось создать ссылку для шаринга');
+      }
     });
-}
-
-function showErrorMessage(message) {
-    const errorElement = document.createElement('div');
-    errorElement.className = 'alert alert-danger mt-3 fade-in';
-    errorElement.textContent = message;
-    
-    const messageContainer = document.getElementById('chatMessages');
-    if (messageContainer) {
-        messageContainer.appendChild(errorElement);
-        messageContainer.scrollTo({
-            top: messageContainer.scrollHeight,
-            behavior: 'smooth'
-        });
-    }
-    
-    setTimeout(() => {
-        if (errorElement.parentNode) {
-            errorElement.remove();
-        }
-    }, 5000);
-}
-
-function addMessage(role, content) {
-    const messageContainer = document.getElementById('chatMessages');
-    if (!messageContainer) return;
-    
-    const messageElement = document.createElement('div');
-    messageElement.className = `message message-${role} fade-in`;
-    
-    const timestamp = new Date().toLocaleTimeString('ru-RU', {
-        hour: '2-digit',
-        minute: '2-digit'
+  }
+  if (copyBtn) {
+    copyBtn.addEventListener('click', () => {
+      const link = document.getElementById('shareLink');
+      link.select();
+      navigator.clipboard.writeText(link.value);
+      copyBtn.textContent = 'Скопировано ✓';
+      setTimeout(() => (copyBtn.textContent = 'Скопировать'), 2000);
     });
-    
-    const avatarText = role === 'user' ? 'Вы' : 'AI';
-    
-    messageElement.innerHTML = `
-        <div class="message-header">
-            <div class="message-avatar avatar-${role}">${avatarText}</div>
-            <span class="message-timestamp">${timestamp}</span>
-        </div>
-        <div class="message-content">
-            ${content.replace(/\n/g, '<br>')}
-        </div>
-    `;
-    
-    messageContainer.appendChild(messageElement);
-    messageContainer.scrollTo({
-        top: messageContainer.scrollHeight,
-        behavior: 'smooth'
-    });
-}
+  }
 
-function showTypingIndicator() {
-    const messageContainer = document.getElementById('chatMessages');
-    if (!messageContainer) return;
-    
-    const typingElement = document.createElement('div');
-    typingElement.id = 'typingIndicator';
-    typingElement.className = 'message message-assistant typing-indicator fade-in';
-    typingElement.innerHTML = `
-        <div class="message-header">
-            <div class="message-avatar avatar-assistant">AI</div>
-            <span class="message-timestamp">печатает...</span>
-        </div>
-        <div class="message-content">
-            <div class="typing-dots">
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
-        </div>
-    `;
-    
-    messageContainer.appendChild(typingElement);
-    messageContainer.scrollTo({
-        top: messageContainer.scrollHeight,
-        behavior: 'smooth'
+  // ───── Close modals on outside click ─────
+  document.querySelectorAll('.modal-back').forEach((m) => {
+    m.addEventListener('click', (e) => {
+      if (e.target === m) m.classList.remove('open');
     });
-}
-
-function hideTypingIndicator() {
-    const typingIndicator = document.getElementById('typingIndicator');
-    if (typingIndicator) {
-        typingIndicator.remove();
-    }
-}
+  });
+})();
