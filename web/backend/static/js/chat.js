@@ -1,5 +1,4 @@
-// chat.js — редизайн под новый layout (.msg, .msg-content, .modal-back и т.д.)
-// + минимальный, безопасный markdown-рендер с поддержкой nested списков по indent.
+// chat.js — markdown с правильно вложенными списками (nested внутри <li>).
 
 (function () {
   // ───── DOM ─────
@@ -30,7 +29,6 @@
     };
     input.addEventListener('input', autosize);
     autosize();
-
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -39,12 +37,9 @@
     });
   }
 
-  // ───── Скролл ─────
-  const scrollDown = () => {
-    if (stream) stream.scrollTop = stream.scrollHeight;
-  };
+  const scrollDown = () => { if (stream) stream.scrollTop = stream.scrollHeight; };
 
-  // ───── Markdown (свой, безопасный, с indent-aware nested lists) ─────
+  // ───── Markdown render ─────
   const escapeHtml = (s) => s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -62,7 +57,6 @@
     return s;
   }
 
-  // классификация строки: возвращаем kind + indent (число пробелов в начале)
   function lineMeta(line) {
     const m = line.match(/^( *)(.*)$/);
     const indent = m[1].length;
@@ -76,7 +70,7 @@
   }
 
   function renderMarkdown(src) {
-    // 1) выделить fenced code blocks
+    // 1) fenced code blocks
     const blocks = [];
     let txt = src.replace(/```(\w+)?\n?([\s\S]*?)```/g, (_, lang, code) => {
       blocks.push(`<pre><code>${escapeHtml(code.replace(/\n+$/, ''))}</code></pre>`);
@@ -87,7 +81,7 @@
     const lines = txt.split('\n');
     const out = [];
     let para = [];
-    // stack of open lists: [{ tag: 'ol'|'ul', indent: number }]
+    // stack: [{ tag: 'ol'|'ul', indent, liOpen: bool }]
     const stack = [];
 
     const flushPara = () => {
@@ -96,19 +90,26 @@
         para = [];
       }
     };
-    const closeAll = () => {
-      while (stack.length) {
-        out.push(`</${stack.pop().tag}>`);
-      }
+    const closeOpenLi = () => {
+      const top = stack[stack.length - 1];
+      if (top && top.liOpen) { out.push('</li>'); top.liOpen = false; }
     };
-    const closeUntil = (indent, kind) => {
+    const closeListsTo = (indent, kind) => {
+      // закрываем стек пока top.indent > indent ИЛИ (top.indent==indent && top.tag != kind)
       while (stack.length) {
         const top = stack[stack.length - 1];
-        if (top.indent > indent) { out.push(`</${top.tag}>`); stack.pop(); continue; }
-        if (top.indent === indent && top.tag !== kind) {
-          out.push(`</${top.tag}>`); stack.pop(); continue;
-        }
-        break;
+        if (top.indent > indent || (top.indent === indent && top.tag !== kind)) {
+          if (top.liOpen) { out.push('</li>'); top.liOpen = false; }
+          out.push(`</${top.tag}>`);
+          stack.pop();
+        } else break;
+      }
+    };
+    const closeAll = () => {
+      while (stack.length) {
+        const top = stack.pop();
+        if (top.liOpen) out.push('</li>');
+        out.push(`</${top.tag}>`);
       }
     };
 
@@ -130,20 +131,39 @@
       if (meta.kind === 'ol' || meta.kind === 'ul') {
         flushPara();
         const tag = meta.kind;
-        closeUntil(meta.indent, tag);
+
+        // 1) закрыть все более глубокие списки и не-нашего типа на том же уровне
+        closeListsTo(meta.indent, tag);
+
         const top = stack[stack.length - 1];
         if (!top || top.indent < meta.indent) {
+          // OPEN nested list внутри текущего открытого <li> (если есть)
           out.push(`<${tag}>`);
-          stack.push({ tag, indent: meta.indent });
+          stack.push({ tag, indent: meta.indent, liOpen: false });
+        } else {
+          // тот же список — закрываем предыдущий <li>
+          closeOpenLi();
         }
         const m = meta.raw.match(/^(?:\d+\.|[-*+])\s+(.+)/);
-        out.push(`<li>${renderInline(m[1])}</li>`);
+        out.push(`<li>${renderInline(m[1])}`);
+        stack[stack.length - 1].liOpen = true;
         continue;
       }
       if (meta.kind === 'empty') {
         flushPara();
+        // не закрываем списки на пустой строке — между li часто пустые строки
         continue;
       }
+      // обычная строка (параграф)
+      // Если мы внутри <li> (top.liOpen) и indent > top.indent — это продолжение li-текста.
+      const top = stack[stack.length - 1];
+      if (top && top.liOpen && meta.indent > top.indent) {
+        // дополняем текст внутри открытого li
+        const lastIdx = out.length - 1;
+        if (lastIdx >= 0) out[lastIdx] += ' ' + renderInline(meta.raw);
+        continue;
+      }
+      // Иначе — закрываем все списки и параграф
       closeAll();
       para.push(line);
     }
@@ -151,19 +171,15 @@
     return out.join('\n');
   }
 
-  // отрендерить markdown в существующих исторических .msg-content
+  // отрендерить в исторических .msg-content
   document.querySelectorAll('.msg-content').forEach((el) => {
     if (el.dataset.rendered) return;
-    const raw = el.textContent;
-    el.innerHTML = renderMarkdown(raw);
+    el.innerHTML = renderMarkdown(el.textContent);
     el.dataset.rendered = '1';
   });
   scrollDown();
 
-  const now = () => {
-    const d = new Date();
-    return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-  };
+  const now = () => new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 
   function appendMessage(role, content) {
     const el = document.createElement('div');
@@ -171,12 +187,11 @@
     el.dataset.role = role;
     const initial = role === 'user' ? userInitial : 'S';
     const roleLabel = role === 'user' ? 'Вы' : 'Saiga';
-    const contentHtml = renderMarkdown(content);
     el.innerHTML = `
       <div class="msg-avatar ${role}">${escapeHtml(initial)}</div>
       <div class="msg-body">
         <div class="msg-role">${roleLabel} · ${now()}</div>
-        <div class="msg-content" data-rendered="1">${contentHtml}</div>
+        <div class="msg-content" data-rendered="1">${renderMarkdown(content)}</div>
       </div>`;
     messages.appendChild(el);
     scrollDown();
@@ -190,9 +205,7 @@
       <div class="msg-avatar assistant">S</div>
       <div class="msg-body">
         <div class="msg-role">Saiga · печатает</div>
-        <div class="msg-content">
-          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-        </div>
+        <div class="msg-content"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
       </div>`;
     messages.appendChild(el);
     scrollDown();
@@ -216,8 +229,7 @@
 
   let busy = false;
   async function send(text) {
-    if (busy) return;
-    if (!text.trim()) return;
+    if (busy || !text.trim()) return;
     busy = true;
     if (sendBtn) sendBtn.disabled = true;
 
@@ -228,24 +240,18 @@
 
     try {
       const r1 = await fetch(`/api/conversations/${conversationId}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: text })
       });
       if (!r1.ok) throw new Error('Не удалось сохранить сообщение');
-
       const r2 = await fetch('/api/llm/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conversation_id: conversationId, message: text })
       });
       const data = await r2.json();
       removeTyping();
-      if (!r2.ok) {
-        showError(data.error || 'Ошибка генерации');
-      } else {
-        appendMessage('assistant', data.message);
-      }
+      if (!r2.ok) showError(data.error || 'Ошибка генерации');
+      else appendMessage('assistant', data.message);
     } catch (e) {
       removeTyping();
       showError('Сеть: ' + e.message);
@@ -256,12 +262,7 @@
     }
   }
 
-  if (form) {
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      send(input.value);
-    });
-  }
+  if (form) form.addEventListener('submit', (e) => { e.preventDefault(); send(input.value); });
 
   if (quickReplies) {
     quickReplies.addEventListener('click', (e) => {
@@ -283,14 +284,9 @@
       try {
         const r = await fetch('/api/files/upload', { method: 'POST', body: fd });
         const data = await r.json();
-        if (data.extracted_text) {
-          await send(`📄 ${file.name}:\n\n${data.extracted_text}`);
-        } else {
-          showError(data.error || 'Не удалось обработать файл');
-        }
-      } catch (err) {
-        showError('Загрузка файла: ' + err.message);
-      }
+        if (data.extracted_text) await send(`📄 ${file.name}:\n\n${data.extracted_text}`);
+        else showError(data.error || 'Не удалось обработать файл');
+      } catch (err) { showError('Загрузка файла: ' + err.message); }
       fileInput.value = '';
     });
   }
@@ -302,9 +298,7 @@
         const data = await r.json();
         document.getElementById('shareLink').value = data.shareUrl;
         document.getElementById('shareModal').classList.add('open');
-      } catch (e) {
-        showError('Не удалось создать ссылку для шаринга');
-      }
+      } catch (e) { showError('Не удалось создать ссылку для шаринга'); }
     });
   }
   if (copyBtn) {
@@ -318,8 +312,6 @@
   }
 
   document.querySelectorAll('.modal-back').forEach((m) => {
-    m.addEventListener('click', (e) => {
-      if (e.target === m) m.classList.remove('open');
-    });
+    m.addEventListener('click', (e) => { if (e.target === m) m.classList.remove('open'); });
   });
 })();

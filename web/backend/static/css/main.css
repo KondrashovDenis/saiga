@@ -597,3 +597,9 @@ input, textarea, select { font: inherit; color: inherit; background: transparent
   padding: 4px 12px;
   color: var(--tx-muted);
 }
+/* Вложенные списки (внутри <li>) — без зазора сверху */
+.msg-content li > ul, .msg-content li > ol {
+  margin-top: 2px;
+  padding-left: 22px;
+}
+.msg-content li > ul li, .msg-content li > ol li { margin: 0; }
