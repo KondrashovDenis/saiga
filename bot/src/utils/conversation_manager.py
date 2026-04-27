@@ -1,10 +1,9 @@
 from sqlalchemy import select, desc
 from sqlalchemy.orm import selectinload
 from models.database import async_session
-from models.user import User
 from models.conversation import Conversation
 from models.message import Message
-from typing import Optional, List
+from typing import List
 
 class ConversationManager:
     @staticmethod

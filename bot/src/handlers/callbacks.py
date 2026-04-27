@@ -164,8 +164,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             title = selected_conv.title if selected_conv.title and selected_conv.title != "Новый диалог" else f"Диалог #{conv_id}"
             message_count = len(selected_conv.messages) if selected_conv.messages else 0
             
-            text = f"⚠️ **Подтверждение удаления**\n\n"
-            text += f"Вы действительно хотите удалить диалог?\n\n"
+            text = "⚠️ **Подтверждение удаления**\n\n"
+            text += "Вы действительно хотите удалить диалог?\n\n"
             text += f"📖 **{title}**\n"
             text += f"💬 Сообщений: {message_count}\n\n"
             text += "⚠️ **Это действие нельзя отменить!**"

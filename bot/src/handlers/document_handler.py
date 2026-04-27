@@ -6,7 +6,6 @@ from telegram.ext import MessageHandler, filters, ContextTypes
 
 from models.database import get_or_create_user
 from utils.conversation_manager import ConversationManager
-from utils.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +88,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if temp_path and os.path.exists(temp_path):
                 try:
                     os.unlink(temp_path)
-                except:
+                except OSError:
                     pass
     
     except Exception as e:

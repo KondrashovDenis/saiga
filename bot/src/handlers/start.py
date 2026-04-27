@@ -2,7 +2,6 @@ import logging
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import async_session
 from models.user import User
