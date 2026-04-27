@@ -1,38 +1,22 @@
 services:
   saiga-web-app:
-    image: docker-saiga-web-app:latest
-    pull_policy: never
+    build: ../backend
+    image: saiga-web:latest
     container_name: saiga-web-app
     restart: unless-stopped
     env_file: ../.env
-    volumes:
-      - shared-saiga-db:/data
     environment:
-      - DATABASE_URL=sqlite:////data/app.db
       - LLM_API_URL=http://saiga-llm:5000/v1/chat/completions
-      - TELEGRAM_BOT_USERNAME=saiga_ai_bot
-      - FLASK_DEBUG=1
     networks:
-      - nginx-proxy
-    depends_on:
-      - redis
-    ports:
-      - "8081:5000"
-
-  redis:
-    image: redis:7.0-alpine
-    container_name: saiga-redis
-    restart: unless-stopped
-    volumes:
-      - redis-data:/data
-    networks:
-      - nginx-proxy
-
-volumes:
-  shared-saiga-db:
-    external: true
-  redis-data:
+      - nginx-proxy        # Caddy → web
+      - saiga-internal     # web → postgres
+    # depends_on не используем — postgres в отдельном compose-проекте.
+    # Запуск: сначала ~/projects/saiga/postgres, потом web.
 
 networks:
+  # Caddy <-> web
   nginx-proxy:
+    external: true
+  # web <-> postgres (создаётся в postgres/docker-compose.yml)
+  saiga-internal:
     external: true

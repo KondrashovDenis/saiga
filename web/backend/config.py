@@ -1,31 +1,40 @@
 import os
 from datetime import timedelta
 
+
+def _required(name: str) -> str:
+    """Достать env-переменную или упасть с понятной ошибкой при старте."""
+    val = os.environ.get(name)
+    if not val:
+        raise RuntimeError(
+            f"Environment variable {name} is required but not set. "
+            f"Define it in web/.env (see web/.env.example)."
+        )
+    return val
+
+
 class Config:
-    # Базовая директория проекта
     BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-    
-    # Секретный ключ для подписи сессий и т.д.
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-    
-    # Настройки SQLite БД
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 
-                                           f"sqlite:///{os.path.join(BASE_DIR, 'app.db')}")
+
+    # Секреты — обязательные. Никаких dev-fallback'ов в проде.
+    SECRET_KEY = _required('SECRET_KEY')
+    SQLALCHEMY_DATABASE_URI = _required('DATABASE_URL')
+
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    
-    # Настройки для Flask-Login
+
+    # Flask-Login
     REMEMBER_COOKIE_DURATION = timedelta(days=14)
-    
-    # Настройки для LLM API
-    LLM_API_URL = os.environ.get('LLM_API_URL', 'http://localhost:7860/api/v1/generate')
-    LLM_DEFAULT_TEMPERATURE = 0.7
-    LLM_DEFAULT_TOP_P = 0.9
-    LLM_DEFAULT_MAX_TOKENS = 2048
-    
-    # Telegram Bot настройки
+
+    # LLM API — внутри docker network к saiga-llm:5000
+    LLM_API_URL = os.environ.get('LLM_API_URL', 'http://saiga-llm:5000/v1/chat/completions')
+    LLM_DEFAULT_TEMPERATURE = float(os.environ.get('DEFAULT_TEMPERATURE', '0.7'))
+    LLM_DEFAULT_TOP_P = float(os.environ.get('DEFAULT_TOP_P', '0.9'))
+    LLM_DEFAULT_MAX_TOKENS = int(os.environ.get('DEFAULT_MAX_TOKENS', '2048'))
+
+    # Telegram (для интеграции с ботом — авторизация через Telegram Login Widget)
     TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
     TELEGRAM_BOT_USERNAME = os.environ.get('TELEGRAM_BOT_USERNAME', 'saiga_ai_bot')
-    
-    # Параметры приложения
-    MAX_CONVERSATIONS_PER_USER = 50  # Максимальное число диалогов на пользователя
-    MAX_MESSAGES_PER_CONVERSATION = 100  # Максимальное число сообщений в диалоге
+
+    # Лимиты
+    MAX_CONVERSATIONS_PER_USER = 50
+    MAX_MESSAGES_PER_CONVERSATION = 100

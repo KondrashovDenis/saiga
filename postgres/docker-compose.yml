@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: saiga-postgres
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Хардить настройки производительности под наш use-case (мелкие тексты диалогов)
+      # — не нужно, defaults подходят. Если что — потом ALTER SYSTEM.
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    ports:
+      # Слушаем только на localhost хоста — для SSH-туннеля с debianOCR.
+      # Снаружи 5432 не доступен.
+      - "127.0.0.1:5432:5432"
+    networks:
+      - saiga-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  postgres-data:
+
+networks:
+  saiga-internal:
+    name: saiga-internal
