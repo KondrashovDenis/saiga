@@ -223,7 +223,7 @@ input, textarea, select { font: inherit; color: inherit; background: transparent
   padding: 24px 0;
 }
 .chat-stream-inner {
-  max-width: 760px;
+  max-width: 900px;
   margin: 0 auto;
   padding: 0 24px;
   display: flex;
@@ -318,7 +318,7 @@ input, textarea, select { font: inherit; color: inherit; background: transparent
   background: linear-gradient(to top, var(--bg) 70%, transparent);
 }
 .composer-inner {
-  max-width: 760px;
+  max-width: 900px;
   margin: 0 auto;
 }
 .composer-box {
@@ -374,7 +374,7 @@ input, textarea, select { font: inherit; color: inherit; background: transparent
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  max-width: 760px;
+  max-width: 900px;
   margin: 0 auto 12px;
   padding: 0 24px;
 }
@@ -553,14 +553,17 @@ input, textarea, select { font: inherit; color: inherit; background: transparent
 }
 
 /* ─────────── MARKDOWN inside .msg-content ─────────── */
-/* Плотный vertical rhythm — Saiga шлёт много мелких блоков подряд. */
+/* Очень плотный rhythm — как в Claude/ChatGPT: списки без зазоров,
+   параграф вплотную к списку под ним. */
 .msg-content > * { margin: 0; }
-.msg-content > * + * { margin-top: 6px; }
-.msg-content > h1 + *, .msg-content > h2 + *,
-.msg-content > h3 + *, .msg-content > h4 + * { margin-top: 4px; }
-.msg-content > ul + ol, .msg-content > ol + ul,
-.msg-content > p  + ol, .msg-content > p  + ul,
-.msg-content > ol + p,  .msg-content > ul + p { margin-top: 8px; }
+.msg-content > * + * { margin-top: 4px; }
+.msg-content > p + ul, .msg-content > p + ol,
+.msg-content > h1 + ul, .msg-content > h1 + ol,
+.msg-content > h2 + ul, .msg-content > h2 + ol,
+.msg-content > h3 + ul, .msg-content > h3 + ol,
+.msg-content > h4 + ul, .msg-content > h4 + ol { margin-top: 2px; }
+.msg-content > ul + p, .msg-content > ol + p,
+.msg-content > p  + p { margin-top: 8px; }
 
 .msg-content h1, .msg-content h2, .msg-content h3, .msg-content h4 {
   font-weight: 600;
@@ -585,8 +588,9 @@ input, textarea, select { font: inherit; color: inherit; background: transparent
 .msg-content ul, .msg-content ol { padding-left: 22px; }
 .msg-content ul { list-style: disc; }
 .msg-content ol { list-style: decimal; }
-.msg-content ul li, .msg-content ol li { margin: 0; line-height: 1.5; }
-.msg-content ul li + li, .msg-content ol li + li { margin-top: 2px; }
+.msg-content ul li, .msg-content ol li { margin: 0; line-height: 1.55; }
+.msg-content ul li + li, .msg-content ol li + li { margin-top: 0; }
+.msg-content li > p { margin: 0; }
 
 .msg-content blockquote {
   border-left: 3px solid var(--bd-strong);
