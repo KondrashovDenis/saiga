@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect, url_for
 from markupsafe import Markup
 from flask_login import LoginManager, current_user
 
@@ -86,6 +86,8 @@ def inject_sidebar():
 # ──────────── routes ────────────
 @app.route('/')
 def index():
+    if not current_user.is_authenticated:
+        return redirect(url_for('auth.login'))
     return render_template('index.html')
 
 
