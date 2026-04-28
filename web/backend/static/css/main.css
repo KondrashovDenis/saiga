@@ -501,7 +501,7 @@ input, textarea, select { font: inherit; color: inherit; background: transparent
 .settings-wrap h1 { font-size: 22px; margin-bottom: 18px; font-weight: 500; }
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
   margin-bottom: 18px;
   align-items: start;
