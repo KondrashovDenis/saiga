@@ -492,6 +492,7 @@ input, textarea, select { font: inherit; color: inherit; background: transparent
 
 /* ─────────── SETTINGS PAGE ─────────── */
 .settings-wrap {
+  width: 100%;
   max-width: 1080px;
   margin: 0 auto;
   padding: 32px 24px;
