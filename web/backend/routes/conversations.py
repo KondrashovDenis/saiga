@@ -52,7 +52,7 @@ def view(conversation_id):
         abort(403)
     
     # Получаем сообщения
-    messages = list(conversation.messages)
+    messages = [*conversation.messages]
     
     # Определяем, является ли пользователь владельцем диалога
     is_owner = conversation.user_id == current_user.id
@@ -85,6 +85,22 @@ def delete(conversation_id):
     
     flash('Диалог успешно удален', 'success')
     return redirect(url_for('conversations.list'))
+
+@conversations_bp.route('/<int:conversation_id>/rename', methods=['POST'])
+@login_required
+def rename(conversation_id):
+    """Переименовать диалог."""
+    conversation = db.session.query(Conversation).get_or_404(conversation_id)
+    if conversation.user_id != current_user.id:
+        abort(403)
+    payload = request.get_json(silent=True) or {}
+    title = (payload.get('title') or '').strip()
+    if not title:
+        return jsonify({'error': 'title_required'}), 400
+    conversation.title = title[:200]
+    db.session.commit()
+    return jsonify({'title': conversation.title})
+
 
 @conversations_bp.route('/<int:conversation_id>/share', methods=['POST'])
 @login_required
@@ -129,7 +145,7 @@ def shared(token):
         abort(404)
     
     # Получаем сообщения
-    messages = list(conversation.messages)
+    messages = [*conversation.messages]
     
     # Опционально: увеличиваем счетчик просмотров (если такая функция нужна)
     

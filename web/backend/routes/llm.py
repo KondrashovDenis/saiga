@@ -36,7 +36,7 @@ def generate():
         db.session.commit()
     
     # Получаем историю сообщений для контекста
-    messages = list(conversation.messages)
+    messages = [*conversation.messages]
     
     # Формируем контекст для LLM
     context = []

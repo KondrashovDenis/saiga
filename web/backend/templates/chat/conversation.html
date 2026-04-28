@@ -3,14 +3,45 @@
 {% block content %}
 
 <div class="main-head">
-    <div class="main-title">{{ conversation.title }}</div>
+    <div class="main-title" id="convTitle" data-conversation-id="{{ conversation.id }}">{{ conversation.title }}</div>
     {% if is_owner %}
     <div class="main-actions">
+        <button class="icon-btn" id="renameBtn" title="Переименовать">✎</button>
         <button class="icon-btn" id="shareBtn" title="Поделиться">↗</button>
         <button class="icon-btn danger" onclick="document.getElementById('deleteModal').classList.add('open')" title="Удалить">×</button>
     </div>
     {% endif %}
 </div>
+
+{% if is_owner %}
+<script>
+(function() {
+    const btn = document.getElementById('renameBtn');
+    const titleEl = document.getElementById('convTitle');
+    if (!btn || !titleEl) return;
+    btn.addEventListener('click', async () => {
+        const current = titleEl.textContent.trim();
+        const next = prompt('Новое название диалога:', current);
+        if (!next || next.trim() === '' || next.trim() === current) return;
+        const id = titleEl.dataset.conversationId;
+        try {
+            const r = await fetch(`/conversations/${id}/rename`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: next.trim() }),
+            });
+            if (!r.ok) { alert('Ошибка: ' + r.status); return; }
+            const d = await r.json();
+            titleEl.textContent = d.title;
+            document.title = d.title;
+            // sidebar тоже обновим если есть
+            const sb = document.querySelector(`.sb-conv[href$="/conversations/${id}"] .sb-conv-title`);
+            if (sb) sb.textContent = d.title;
+        } catch (e) { alert('Сетевая ошибка: ' + e.message); }
+    });
+})();
+</script>
+{% endif %}
 
 <div class="chat">
     <div class="chat-stream" id="chatStream">

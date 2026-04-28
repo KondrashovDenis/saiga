@@ -19,7 +19,7 @@ def get_messages(conversation_id):
         abort(403)
     
     # Получаем сообщения
-    messages = list(conversation.messages)
+    messages = [*conversation.messages]
     
     # Преобразуем сообщения в формат JSON
     messages_json = [message.to_dict() for message in messages]

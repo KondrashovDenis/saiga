@@ -77,7 +77,7 @@ async def ask_temperature(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🌡 Введи новое значение <b>Temperature</b>.\n"
         f"Текущее: <b>{s.temperature}</b>\n"
         f"Диапазон: <code>0.1 — 2.0</code>\n"
-        f"<i>0.1 — точно, 0.7 — баланс, 1.0 — креативно.</i>\n\n"
+        f"<i>0.1 — точно, 0.7 — баланс, 1.0 — креативно, 2.0 — макс хаос.</i>\n\n"
         f"/cancel чтобы отменить.",
         parse_mode="HTML",
     )
