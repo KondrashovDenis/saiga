@@ -157,39 +157,57 @@ async def _select_conversation(query, user, conv_id: int):
 
 
 async def _show_history(query, user, conv_id: int):
+    """Показываем полную историю диалога. Если не влезает в 4096 — разбиваем на чанки."""
+    from html import escape
+    from utils.markdown_tg import split_for_telegram
+
     db_user = await get_or_create_user(
         telegram_id=user.id, telegram_username=user.username,
         first_name=user.first_name, last_name=user.last_name,
     )
     messages = await ConversationManager.get_conversation_messages(conv_id)
 
-    if not messages:
-        text = "📭 В этом диалоге пока нет сообщений."
-    else:
-        conversations = await ConversationManager.get_user_conversations(db_user.id)
-        conv = next((c for c in conversations if c.id == conv_id), None)
-        title = (conv.title if conv and conv.title and conv.title != "Новый диалог"
-                 else f"Диалог #{conv_id}")
-        text = f"📋 <b>История: {title}</b>\n\n"
-        recent = messages[-10:] if len(messages) > 10 else messages
-        if len(messages) > 10:
-            text += f"<i>(последние 10 из {len(messages)})</i>\n\n"
-        for msg in recent:
-            if msg.role == 'user':
-                text += f"👤 <b>Ты:</b> {msg.content}\n\n"
-            else:
-                content = msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
-                text += f"🤖 <b>Saiga:</b> {content}\n\n"
-            if len(text) > 3500:
-                text += "<i>...обрезано</i>"
-                break
-
     keyboard = [
         [InlineKeyboardButton("🔙 К диалогу", callback_data=f"select_conv_{conv_id}")],
         [InlineKeyboardButton("🗑 Удалить диалог", callback_data=f"confirm_delete_{conv_id}")],
         [InlineKeyboardButton("📋 К списку", callback_data="back_to_list")],
     ]
-    await query.edit_message_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+    nav_markup = InlineKeyboardMarkup(keyboard)
+
+    if not messages:
+        await query.edit_message_text(
+            "📭 В этом диалоге пока нет сообщений.",
+            reply_markup=nav_markup,
+        )
+        return
+
+    conversations = await ConversationManager.get_user_conversations(db_user.id)
+    conv = next((c for c in conversations if c.id == conv_id), None)
+    title = (conv.title if conv and conv.title and conv.title != "Новый диалог"
+             else f"Диалог #{conv_id}")
+
+    # Собираем весь текст истории — экранируем HTML, чтобы * < > не сломали parse_mode.
+    body = f"📋 <b>История: {escape(title)}</b>\n<i>Сообщений: {len(messages)}</i>\n\n"
+    for msg in messages:
+        prefix = "👤 <b>Ты:</b>" if msg.role == "user" else "🤖 <b>Saiga:</b>"
+        body += f"{prefix}\n{escape(msg.content)}\n\n"
+
+    chunks = split_for_telegram(body, limit=3800)
+
+    # Первое сообщение — edit, остальные — reply подряд. Кнопки навигации только на последнем.
+    first = chunks[0] + ("\n<i>(продолжение ниже…)</i>" if len(chunks) > 1 else "")
+    await query.edit_message_text(
+        first,
+        parse_mode="HTML",
+        reply_markup=(nav_markup if len(chunks) == 1 else None),
+    )
+    for i, ch in enumerate(chunks[1:], start=1):
+        is_last = i == len(chunks) - 1
+        await query.message.reply_text(
+            ch,
+            parse_mode="HTML",
+            reply_markup=(nav_markup if is_last else None),
+        )
 
 
 async def _confirm_delete(query, user, conv_id: int):
