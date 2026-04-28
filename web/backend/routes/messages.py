@@ -19,7 +19,7 @@ def get_messages(conversation_id):
         abort(403)
     
     # Получаем сообщения
-    messages = conversation.messages.order_by(Message.timestamp).all()
+    messages = list(conversation.messages)
     
     # Преобразуем сообщения в формат JSON
     messages_json = [message.to_dict() for message in messages]
@@ -43,7 +43,7 @@ def add_message(conversation_id):
     
     # Проверяем лимит на количество сообщений
     from config import Config
-    if conversation.messages.count() >= Config.MAX_MESSAGES_PER_CONVERSATION:
+    if len(conversation.messages) >= Config.MAX_MESSAGES_PER_CONVERSATION:
         return jsonify({
             'error': 'Достигнуто максимальное количество сообщений. Пожалуйста, создайте новый диалог.'
         }), 400

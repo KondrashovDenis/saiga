@@ -448,7 +448,7 @@ input, textarea, select { font: inherit; color: inherit; background: transparent
   color: var(--tx-muted);
   margin-bottom: 6px;
 }
-.field input[type=text], .field input[type=email], .field input[type=password] {
+.field input[type=text], .field input[type=email], .field input[type=password], .field input[type=number] {
   width: 100%;
   padding: 10px 12px;
   background: var(--bg-input);

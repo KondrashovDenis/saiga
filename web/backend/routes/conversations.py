@@ -52,7 +52,7 @@ def view(conversation_id):
         abort(403)
     
     # Получаем сообщения
-    messages = conversation.messages.order_by(Message.timestamp).all()
+    messages = list(conversation.messages)
     
     # Определяем, является ли пользователь владельцем диалога
     is_owner = conversation.user_id == current_user.id
@@ -129,7 +129,7 @@ def shared(token):
         abort(404)
     
     # Получаем сообщения
-    messages = conversation.messages.order_by(Message.timestamp).all()
+    messages = list(conversation.messages)
     
     # Опционально: увеличиваем счетчик просмотров (если такая функция нужна)
     

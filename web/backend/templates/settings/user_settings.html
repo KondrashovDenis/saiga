@@ -22,6 +22,12 @@
                     {{ form.top_p(step="0.1") }}
                     <div style="font-size:11px; color:var(--tx-faint); margin-top:4px;">Разнообразие словаря (0.1–1.0)</div>
                 </div>
+
+                <div class="field">
+                    {{ form.max_tokens.label }}
+                    {{ form.max_tokens(step="64", min="128", max="8192") }}
+                    <div style="font-size:11px; color:var(--tx-faint); margin-top:4px;">Лимит длины ответа (128–8192)</div>
+                </div>
             </div>
 
             <div class="settings-card">

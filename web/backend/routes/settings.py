@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
-from wtforms import StringField, SelectField, FloatField, BooleanField, SubmitField
+from wtforms import StringField, SelectField, FloatField, IntegerField, BooleanField, SubmitField
 from wtforms.validators import DataRequired, Email, NumberRange
 
 from database import db
@@ -16,10 +16,13 @@ class UserSettingsForm(FlaskForm):
         ('dark', 'Темная')
     ])
     temperature = FloatField('Temperature', validators=[
-        NumberRange(min=0.1, max=1.0, message='Значение должно быть от 0.1 до 1.0')
+        NumberRange(min=0.1, max=2.0, message='Значение должно быть от 0.1 до 2.0')
     ])
     top_p = FloatField('Top P', validators=[
         NumberRange(min=0.1, max=1.0, message='Значение должно быть от 0.1 до 1.0')
+    ])
+    max_tokens = IntegerField('Max Tokens', validators=[
+        NumberRange(min=128, max=8192, message='Значение должно быть от 128 до 8192')
     ])
     message_animations = BooleanField('Анимации сообщений')
     auto_scroll = BooleanField('Автоматическая прокрутка')

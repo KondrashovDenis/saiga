@@ -36,7 +36,7 @@ def generate():
         db.session.commit()
     
     # Получаем историю сообщений для контекста
-    messages = conversation.messages.order_by(Message.timestamp).all()
+    messages = list(conversation.messages)
     
     # Формируем контекст для LLM
     context = []
