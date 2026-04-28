@@ -1,6 +1,15 @@
 services:
   saiga:
+    # Имя образа сохранено — текущий running container продолжит жить, пока
+    # не сделают явный rebuild:
+    #   cd ~/projects/saiga/llm
+    #   docker compose build
+    #   docker compose up -d --force-recreate
+    # Build context = llm/, чтобы submodule text-generation-webui/ попал в образ.
     image: llm-docker-saiga:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     pull_policy: never
     container_name: saiga-llm
     restart: unless-stopped
@@ -16,16 +25,9 @@ services:
     ports:
       - "7860:7860"
       - "5000:5000"
-    # Образ был собран с симлинком на CUDA stub-библиотеку (для линковки),
-    # которая мешает рантайму. Удаляем перед стартом, чтобы ldconfig резолвил
-    # реальный libcuda.so.1, проброшенный nvidia-container-toolkit.
-    # См. README раздел "Пересборка LLM-образа" — в новом Dockerfile эту строку
-    # надо убрать совсем.
-    entrypoint:
-      - /bin/bash
-      - -c
-      - 'rm -f /usr/local/cuda/lib64/libcuda.so.1 && ldconfig && exec /opt/nvidia/nvidia_entrypoint.sh "$$@"'
-      - --
+    # Stub-симлинк на libcuda.so убран из Dockerfile — entrypoint-костыль больше
+    # не нужен. Запуск идёт через стандартный nvidia_entrypoint.sh из base-образа,
+    # CMD задаётся ниже.
     command:
       - python
       - server.py

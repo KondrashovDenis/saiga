@@ -1,0 +1,3 @@
+[submodule "llm/text-generation-webui"]
+	path = llm/text-generation-webui
+	url = https://github.com/oobabooga/text-generation-webui

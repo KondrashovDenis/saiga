@@ -79,7 +79,7 @@ saiga/
 
 
 ```bash
-git clone git@github.com:<your-fork>/saiga.git
+git clone --recursive git@github.com:<your-fork>/saiga.git
 cd saiga
 ```
 

@@ -1,0 +1,18 @@
+[Unit]
+Description=Create NVIDIA UVM device nodes
+Documentation=https://docs.nvidia.com/deploy/driver-persistence/
+# Ждём загрузки nvidia-драйвера и завершения базовой инициализации.
+After=systemd-modules-load.service
+# Перед docker — иначе runtime: nvidia контейнеры стартанут до UVM и упадут.
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# -u: создать /dev/nvidia-uvm + /dev/nvidia-uvm-tools
+# -c=N: создать /dev/nvidia<N> для GPU N (нужно до nvidia-uvm-init на некоторых системах)
+# Если у вас не 3 GPU — поправьте флаги -c.
+ExecStart=/usr/bin/nvidia-modprobe -u -c=0 -c=1 -c=2
+
+[Install]
+WantedBy=multi-user.target
