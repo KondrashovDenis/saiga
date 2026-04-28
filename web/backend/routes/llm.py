@@ -60,7 +60,7 @@ def generate():
     generation_config = {
         "temperature": data.get('temperature', settings.temperature),
         "top_p": data.get('top_p', settings.top_p),
-        "max_tokens": data.get('max_tokens', current_app.config['LLM_DEFAULT_MAX_TOKENS'])
+        "max_tokens": data.get('max_tokens', settings.max_tokens or current_app.config['LLM_DEFAULT_MAX_TOKENS'])
     }
     
     # Формируем запрос к API
