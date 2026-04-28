@@ -1,195 +1,141 @@
-import hashlib
-import hmac
-import time
-from urllib.parse import unquote
-from flask import Blueprint, request, redirect, url_for, flash, session, render_template
-from flask_login import login_user, current_user
-from models.user import User
-from models.setting import Setting
-from database import db
+"""Deep-link авторизация и привязка через Telegram-бота.
+
+Старый flow на Telegram Login Widget удалён — он зависел от Widget JS,
+кэшируется на стороне Telegram, ломается при смене domain в @BotFather.
+
+Новый flow:
+  1. Web создаёт одноразовый токен (kind='link' для привязки или 'login'
+     для первичного входа), TTL 10 минут.
+  2. Юзер открывает t.me/<bot>?start=<kind>_<token>.
+  3. Бот ловит /start, ищет токен в БД, привязывает/логинит, ставит used_at.
+  4. Web поллит status-endpoint и обновляет UI / выдаёт session-cookie.
+"""
+from datetime import datetime
+
+from flask import Blueprint, jsonify, request, session
+from flask_login import current_user, login_required, login_user
+
 from config import Config
+from database import db
+from models.telegram_token import TelegramLinkToken
+from models.user import User
 
-# Создаем blueprint для Telegram аутентификации
-telegram_auth_bp = Blueprint('telegram_auth', __name__, url_prefix='/auth/telegram')
 
-def verify_telegram_data(data, bot_token):
-    """Проверяет подлинность данных от Telegram"""
-    check_hash = data.pop('hash', '')
-    data_check_string = '\n'.join([f"{k}={v}" for k, v in sorted(data.items())])
-    
-    secret_key = hashlib.sha256(bot_token.encode()).digest()
-    calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-    
-    return hmac.compare_digest(calculated_hash, check_hash)
+telegram_auth_bp = Blueprint("telegram_auth", __name__, url_prefix="/api/telegram")
 
-@telegram_auth_bp.route('/callback')
-def telegram_callback():
-    """Обработчик callback от Telegram Login Widget"""
-    
-    # Получаем данные от Telegram
-    telegram_data = {
-        'id': request.args.get('id'),
-        'first_name': request.args.get('first_name', ''),
-        'last_name': request.args.get('last_name', ''),
-        'username': request.args.get('username', ''),
-        'photo_url': request.args.get('photo_url', ''),
-        'auth_date': request.args.get('auth_date'),
-        'hash': request.args.get('hash')
-    }
-    
-    # Удаляем None значения
-    telegram_data = {k: unquote(v) if v else '' for k, v in telegram_data.items() if v is not None}
-    
-    if not telegram_data.get('id') or not telegram_data.get('hash'):
-        flash('Ошибка аутентификации Telegram', 'danger')
-        return redirect(url_for('auth.login'))
-    
-    # Проверяем время (данные должны быть не старше 1 часа)
-    auth_date = int(telegram_data.get('auth_date', 0))
-    if time.time() - auth_date > 3600:
-        flash('Данные аутентификации устарели', 'danger')
-        return redirect(url_for('auth.login'))
-    
-    # Верификация данных (в продакшене нужен реальный токен бота)
-    # bot_token = Config.TELEGRAM_BOT_TOKEN
-    # if not verify_telegram_data(telegram_data.copy(), bot_token):
-    #     flash('Неверные данные аутентификации', 'danger')
-    #     return redirect(url_for('auth.login'))
-    
-    telegram_id = int(telegram_data['id'])
-    
-    # Ищем пользователя по telegram_id
-    user = User.find_by_telegram_id(telegram_id)
-    
-    if user:
-        # Обновляем данные пользователя
-        user.telegram_username = telegram_data.get('username')
-        user.first_name = telegram_data.get('first_name')
-        user.last_name = telegram_data.get('last_name')
-        user.last_activity = db.func.now()
-        
-        db.session.commit()
-        
-        # Авторизуем пользователя
-        login_user(user, remember=True)
-        flash(f'Добро пожаловать, {user.display_name}!', 'success')
-        
-        next_page = request.args.get('next')
-        if next_page and next_page.startswith('/'):
-            return redirect(next_page)
-        return redirect(url_for('index'))
-    
-    else:
-        # Пользователь не найден в системе
-        # Сохраняем данные в сессии для регистрации
-        session['telegram_data'] = telegram_data
-        flash('Ваш Telegram аккаунт не связан с системой. Создайте аккаунт или свяжите существующий.', 'info')
-        return redirect(url_for('telegram_auth.link_account'))
 
-@telegram_auth_bp.route('/link')
-def link_account():
-    """Страница связывания Telegram аккаунта"""
-    telegram_data = session.get('telegram_data')
-    if not telegram_data:
-        flash('Данные Telegram не найдены. Повторите авторизацию.', 'danger')
-        return redirect(url_for('auth.login'))
-    
-    return render_template('auth/telegram_link.html', telegram_data=telegram_data)
+def _bot_url(token: str, kind: str) -> str:
+    return f"https://t.me/{Config.TELEGRAM_BOT_USERNAME}?start={kind}_{token}"
 
-@telegram_auth_bp.route('/create', methods=['POST'])
-def create_account():
-    """Создание нового аккаунта через Telegram"""
-    telegram_data = session.get('telegram_data')
-    if not telegram_data:
-        flash('Данные Telegram не найдены. Повторите авторизацию.', 'danger')
-        return redirect(url_for('auth.login'))
-    
-    # Создаем нового пользователя
-    user = User(
-        telegram_id=int(telegram_data['id']),
-        telegram_username=telegram_data.get('username'),
-        first_name=telegram_data.get('first_name'),
-        last_name=telegram_data.get('last_name')
-    )
-    user.auth_method = 'telegram'
-    
-    db.session.add(user)
+
+# ───────────────────────── LINK (привязка для авторизованного юзера) ─────────
+
+@telegram_auth_bp.route("/link/start", methods=["POST"])
+@login_required
+def link_start():
+    """Создаёт link-токен и возвращает t.me URL.
+
+    Если у юзера уже привязан Telegram — возвращает 409.
+    """
+    if current_user.telegram_id is not None:
+        return jsonify({
+            "error": "telegram_already_linked",
+            "telegram_username": current_user.telegram_username,
+        }), 409
+
+    tok = TelegramLinkToken.generate(kind="link", user_id=current_user.id)
+    db.session.add(tok)
     db.session.commit()
-    
-    # Создаем настройки по умолчанию
-    setting = Setting(user_id=user.id)
-    db.session.add(setting)
-    db.session.commit()
-    
-    # Очищаем сессию
-    session.pop('telegram_data', None)
-    
-    # Авторизуем пользователя
-    login_user(user, remember=True)
-    flash(f'Аккаунт создан! Добро пожаловать, {user.display_name}!', 'success')
-    
-    return redirect(url_for('index'))
 
-@telegram_auth_bp.route('/link-existing', methods=['POST'])
-def link_existing():
-    """Связывание Telegram с существующим аккаунтом"""
-    telegram_data = session.get('telegram_data')
-    if not telegram_data:
-        flash('Данные Telegram не найдены. Повторите авторизацию.', 'danger')
-        return redirect(url_for('auth.login'))
-    
-    email = request.form.get('email')
-    password = request.form.get('password')
-    
-    if not email or not password:
-        flash('Введите email и пароль', 'danger')
-        return redirect(url_for('telegram_auth.link_account'))
-    
-    # Ищем пользователя по email
-    user = User.find_by_email(email)
-    if not user or not user.check_password(password):
-        flash('Неверный email или пароль', 'danger')
-        return redirect(url_for('telegram_auth.link_account'))
-    
-    # Проверяем, не привязан ли уже другой Telegram
-    if user.telegram_id and user.telegram_id != int(telegram_data['id']):
-        flash('К этому аккаунту уже привязан другой Telegram', 'danger')
-        return redirect(url_for('telegram_auth.link_account'))
-    
-    # Связываем аккаунты
-    user.link_telegram(
-        telegram_id=int(telegram_data['id']),
-        telegram_username=telegram_data.get('username'),
-        first_name=telegram_data.get('first_name'),
-        last_name=telegram_data.get('last_name')
-    )
-    
-    db.session.commit()
-    
-    # Очищаем сессию
-    session.pop('telegram_data', None)
-    
-    # Авторизуем пользователя
-    login_user(user, remember=True)
-    flash(f'Telegram аккаунт успешно привязан! Добро пожаловать, {user.display_name}!', 'success')
-    
-    return redirect(url_for('index'))
+    return jsonify({
+        "url": _bot_url(tok.token, "link"),
+        "expires_at": tok.expires_at.isoformat() + "Z",
+    })
 
-@telegram_auth_bp.route('/unlink', methods=['POST'])
-def unlink_account():
-    """Отвязывание Telegram аккаунта"""
-    if not current_user.is_authenticated:
-        flash('Необходимо войти в систему', 'danger')
-        return redirect(url_for('auth.login'))
-    
+
+@telegram_auth_bp.route("/link/status", methods=["GET"])
+@login_required
+def link_status():
+    """Возвращает текущее состояние привязки. UI поллит после link/start."""
+    return jsonify({
+        "linked": current_user.telegram_id is not None,
+        "telegram_username": current_user.telegram_username,
+        "telegram_id": current_user.telegram_id,
+    })
+
+
+@telegram_auth_bp.route("/unlink", methods=["POST"])
+@login_required
+def unlink():
+    """Отвязать Telegram. Запрет если это единственный способ входа."""
     if not current_user.can_login_with_password:
-        flash('Нельзя отвязать Telegram - это единственный способ входа. Сначала установите пароль.', 'danger')
-        return redirect(url_for('settings.user_settings'))
-    
+        return jsonify({
+            "error": "telegram_is_only_auth",
+            "message": "Нельзя отвязать — установи пароль сначала.",
+        }), 400
+
     if current_user.unlink_telegram():
         db.session.commit()
-        flash('Telegram аккаунт отвязан', 'success')
-    else:
-        flash('Ошибка отвязывания аккаунта', 'danger')
-    
-    return redirect(url_for('settings.user_settings'))
+        return jsonify({"linked": False})
+
+    return jsonify({"error": "unlink_failed"}), 500
+
+
+# ───────────────────────── LOGIN (первичный вход через Telegram) ─────────────
+
+@telegram_auth_bp.route("/login/start", methods=["POST"])
+def login_start():
+    """Создаёт login-токен (без user_id) для anonymous-юзера.
+
+    Юзер открывает t.me URL, бот спрашивает подтверждение, по подтверждению
+    создаёт/находит юзера по telegram_id и проставляет user_id в токен.
+    """
+    # TODO(security): добавить rate limit по IP (5/мин) — пока MVP.
+    tok = TelegramLinkToken.generate(kind="login", user_id=None)
+    db.session.add(tok)
+    db.session.commit()
+
+    return jsonify({
+        "url": _bot_url(tok.token, "login"),
+        "token": tok.token,        # клиент использует его для poll
+        "expires_at": tok.expires_at.isoformat() + "Z",
+    })
+
+
+@telegram_auth_bp.route("/login/status", methods=["GET"])
+def login_status():
+    """Поллится клиентом. Если бот заполнил user_id — выдаём session-cookie."""
+    token = request.args.get("token", "").strip()
+    if not token:
+        return jsonify({"error": "token_required"}), 400
+
+    tok = TelegramLinkToken.query.filter_by(token=token, kind="login").first()
+    if not tok:
+        return jsonify({"error": "token_not_found"}), 404
+
+    if tok.is_expired:
+        return jsonify({"status": "expired"}), 410
+
+    if tok.user_id is None:
+        # Бот ещё не подтвердил вход.
+        return jsonify({"status": "pending"})
+
+    # Бот подтвердил — выдаём session-cookie.
+    user = User.query.get(tok.user_id)
+    if not user:
+        return jsonify({"error": "user_not_found"}), 500
+
+    # Помечаем токен использованным (если ещё не).
+    if tok.used_at is None:
+        tok.used_at = datetime.utcnow()
+        db.session.commit()
+
+    login_user(user, remember=True)
+    session.permanent = True
+
+    return jsonify({
+        "status": "ok",
+        "user_id": user.id,
+        "display_name": user.display_name,
+        "redirect": "/",
+    })

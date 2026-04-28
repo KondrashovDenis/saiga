@@ -6,16 +6,11 @@
     <h1>Вход</h1>
     <p class="sub">saiga · локальная LLM</p>
 
-    {# ── Telegram-login через виджет ── #}
-    <div style="text-align:center; margin-bottom: 16px;">
-        <script async src="https://telegram.org/js/telegram-widget.js?22"
-                data-telegram-login="saiga_ai_bot"
-                data-size="large"
-                data-corner-radius="6"
-                data-auth-url="https://saiga.vaibkod.ru{{ url_for('telegram_auth.telegram_callback') }}"
-                data-request-access="write"></script>
-        <div style="font-size: 12px; color: var(--tx-faint); margin-top: 6px;">Быстрый вход через Telegram</div>
-    </div>
+    {# ── Telegram deep-link login ── #}
+    <button type="button" id="tg-login-btn" class="btn full" style="background:#229ED9; margin-bottom: 12px;">
+        ➤ Войти через Telegram
+    </button>
+    <div id="tg-login-status" style="font-size:12px; color: var(--tx-faint); text-align:center; min-height:18px; margin-bottom: 6px;"></div>
 
     <div style="text-align:center; color: var(--tx-faint); font-size: 12px; margin: 16px 0; position: relative;">
         <span style="background: var(--bg-sidebar); padding: 0 10px; position: relative; z-index: 1;">или с паролем</span>
@@ -44,4 +39,70 @@
         Нет аккаунта? <a href="{{ url_for('auth.register') }}">Зарегистрироваться</a>
     </div>
 </div>
+
+<script>
+(function() {
+    // Deep-link Telegram login: POST /login/start → редирект в t.me, потом poll.
+    const btn = document.getElementById('tg-login-btn');
+    const statusEl = document.getElementById('tg-login-status');
+    let pollTimer = null;
+
+    async function startLogin() {
+        btn.disabled = true;
+        statusEl.textContent = '...';
+        try {
+            const r = await fetch('/api/telegram/login/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            if (!r.ok) {
+                statusEl.textContent = 'Не удалось начать вход. Попробуй ещё раз.';
+                btn.disabled = false;
+                return;
+            }
+            const { url, token } = await r.json();
+            // Открываем бот в новой вкладке/окне.
+            window.open(url, '_blank', 'noopener');
+            statusEl.innerHTML = 'Открой Telegram и нажми <b>Start</b>. Ждём подтверждения...';
+            pollStatus(token);
+        } catch (e) {
+            statusEl.textContent = 'Сетевая ошибка: ' + e.message;
+            btn.disabled = false;
+        }
+    }
+
+    function pollStatus(token) {
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = setInterval(async () => {
+            try {
+                const r = await fetch('/api/telegram/login/status?token=' + encodeURIComponent(token));
+                if (r.status === 410) {
+                    clearInterval(pollTimer);
+                    statusEl.textContent = '⏰ Истекло время ожидания. Жми кнопку снова.';
+                    btn.disabled = false;
+                    return;
+                }
+                const data = await r.json();
+                if (data.status === 'ok') {
+                    clearInterval(pollTimer);
+                    statusEl.textContent = '✅ Вход выполнен, переходим...';
+                    window.location = data.redirect || '/';
+                }
+            } catch (e) { /* network blip — try again */ }
+        }, 2000);
+        // Стоп через 10 минут (TTL токена).
+        setTimeout(() => {
+            if (pollTimer) {
+                clearInterval(pollTimer);
+                if (statusEl.textContent.indexOf('✅') === -1) {
+                    statusEl.textContent = '⏰ Истекло. Жми кнопку снова.';
+                    btn.disabled = false;
+                }
+            }
+        }, 10 * 60 * 1000);
+    }
+
+    btn.addEventListener('click', startLogin);
+})();
+</script>
 {% endblock %}

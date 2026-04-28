@@ -12,12 +12,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # text-generation-webui — submodule. Нам он для тестов не нужен,
+          # но recursive безопасно и упрощает локальный clone.
+          submodules: false
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
+
+      - name: Install shared package (editable)
+        run: pip install -e ./shared
 
       - name: Install dependencies
         working-directory: bot
