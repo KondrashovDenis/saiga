@@ -12,7 +12,7 @@ messages_bp = Blueprint('messages', __name__, url_prefix='/api/conversations')
 @login_required
 def get_messages(conversation_id):
     """Получает все сообщения диалога"""
-    conversation = Conversation.query.get_or_404(conversation_id)
+    conversation = db.session.query(Conversation).get_or_404(conversation_id)
     
     # Проверяем, принадлежит ли диалог текущему пользователю или является ли он публичным
     if conversation.user_id != current_user.id and not conversation.is_shared:
@@ -30,7 +30,7 @@ def get_messages(conversation_id):
 @login_required
 def add_message(conversation_id):
     """Добавляет новое сообщение в диалог"""
-    conversation = Conversation.query.get_or_404(conversation_id)
+    conversation = db.session.query(Conversation).get_or_404(conversation_id)
     
     # Проверяем, принадлежит ли диалог текущему пользователю
     if conversation.user_id != current_user.id:
@@ -68,13 +68,13 @@ def add_message(conversation_id):
 @login_required
 def delete_message(conversation_id, message_id):
     """Удаляет сообщение из диалога"""
-    conversation = Conversation.query.get_or_404(conversation_id)
+    conversation = db.session.query(Conversation).get_or_404(conversation_id)
     
     # Проверяем, принадлежит ли диалог текущему пользователю
     if conversation.user_id != current_user.id:
         abort(403)
     
-    message = Message.query.get_or_404(message_id)
+    message = db.session.query(Message).get_or_404(message_id)
     
     # Проверяем, принадлежит ли сообщение указанному диалогу
     if message.conversation_id != conversation_id:

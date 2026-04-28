@@ -33,7 +33,7 @@ class UserSettingsForm(FlaskForm):
 @login_required
 def user_settings():
     """Страница настроек пользователя"""
-    settings = Setting.query.filter_by(user_id=current_user.id).first()
+    settings = db.session.query(Setting).filter_by(user_id=current_user.id).first()
     if not settings:
         settings = Setting(user_id=current_user.id)
         db.session.add(settings)
@@ -62,7 +62,7 @@ def save_theme():
     if theme not in ['light', 'dark', 'auto']:
         return jsonify({'error': 'Неверная тема'}), 400
     
-    settings = Setting.query.filter_by(user_id=current_user.id).first()
+    settings = db.session.query(Setting).filter_by(user_id=current_user.id).first()
     if not settings:
         settings = Setting(user_id=current_user.id)
         db.session.add(settings)
@@ -76,7 +76,7 @@ def save_theme():
 @login_required
 def get_user_settings_api():
     """API для получения настроек пользователя"""
-    settings = Setting.query.filter_by(user_id=current_user.id).first()
+    settings = db.session.query(Setting).filter_by(user_id=current_user.id).first()
     if not settings:
         settings = Setting(user_id=current_user.id)
         db.session.add(settings)

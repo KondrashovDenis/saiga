@@ -109,7 +109,7 @@ def login_status():
     if not token:
         return jsonify({"error": "token_required"}), 400
 
-    tok = TelegramLinkToken.query.filter_by(token=token, kind="login").first()
+    tok = db.session.query(TelegramLinkToken).filter_by(token=token, kind="login").first()
     if not tok:
         return jsonify({"error": "token_not_found"}), 404
 
@@ -121,7 +121,7 @@ def login_status():
         return jsonify({"status": "pending"})
 
     # Бот подтвердил — выдаём session-cookie.
-    user = User.query.get(tok.user_id)
+    user = db.session.query(User).get(tok.user_id)
     if not user:
         return jsonify({"error": "user_not_found"}), 500
 

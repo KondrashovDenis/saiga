@@ -34,12 +34,12 @@ class RegistrationForm(FlaskForm):
     submit = SubmitField('Зарегистрироваться')
     
     def validate_username(self, username):
-        user = User.query.filter_by(username=username.data).first()
+        user = db.session.query(User).filter_by(username=username.data).first()
         if user is not None:
             raise ValidationError('Это имя пользователя уже занято. Пожалуйста, выберите другое.')
     
     def validate_email(self, email):
-        user = User.query.filter_by(email=email.data).first()
+        user = db.session.query(User).filter_by(email=email.data).first()
         if user is not None:
             raise ValidationError('Этот email уже используется. Пожалуйста, выберите другой.')
 
@@ -83,7 +83,7 @@ def login():
     
     form = LoginForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(username=form.username.data).first()
+        user = db.session.query(User).filter_by(username=form.username.data).first()
         
         if user is None or not user.check_password(form.password.data):
             flash('Неверное имя пользователя или пароль', 'danger')

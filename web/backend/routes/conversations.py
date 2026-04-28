@@ -14,7 +14,7 @@ conversations_bp = Blueprint('conversations', __name__, url_prefix='/conversatio
 @login_required
 def list():
     """Отображает список диалогов пользователя"""
-    conversations = Conversation.query.filter_by(user_id=current_user.id) \
+    conversations = db.session.query(Conversation).filter_by(user_id=current_user.id) \
                                      .order_by(desc(Conversation.updated_at)) \
                                      .all()
     return render_template('chat/conversations_list.html', conversations=conversations)
@@ -29,7 +29,7 @@ def new():
         
         # Проверяем лимит на количество диалогов
         from config import Config
-        if Conversation.query.filter_by(user_id=current_user.id).count() >= Config.MAX_CONVERSATIONS_PER_USER:
+        if db.session.query(Conversation).filter_by(user_id=current_user.id).count() >= Config.MAX_CONVERSATIONS_PER_USER:
             flash('Вы достигли максимального количества диалогов. Пожалуйста, удалите ненужные диалоги.', 'warning')
             return redirect(url_for('conversations.list'))
         
@@ -45,7 +45,7 @@ def new():
 @login_required
 def view(conversation_id):
     """Отображает диалог"""
-    conversation = Conversation.query.get_or_404(conversation_id)
+    conversation = db.session.query(Conversation).get_or_404(conversation_id)
     
     # Проверяем, принадлежит ли диалог текущему пользователю
     if conversation.user_id != current_user.id and not conversation.is_shared:
@@ -58,7 +58,7 @@ def view(conversation_id):
     is_owner = conversation.user_id == current_user.id
 
     # Получаем настройки пользователя
-    user_settings = Setting.query.filter_by(user_id=current_user.id).first()
+    user_settings = db.session.query(Setting).filter_by(user_id=current_user.id).first()
     if not user_settings:
         user_settings = Setting(user_id=current_user.id)
         db.session.add(user_settings)
@@ -74,7 +74,7 @@ def view(conversation_id):
 @login_required
 def delete(conversation_id):
     """Удаляет диалог"""
-    conversation = Conversation.query.get_or_404(conversation_id)
+    conversation = db.session.query(Conversation).get_or_404(conversation_id)
     
     # Проверяем, принадлежит ли диалог текущему пользователю
     if conversation.user_id != current_user.id:
@@ -90,7 +90,7 @@ def delete(conversation_id):
 @login_required
 def share(conversation_id):
     """Создает или обновляет ссылку для шаринга диалога"""
-    conversation = Conversation.query.get_or_404(conversation_id)
+    conversation = db.session.query(Conversation).get_or_404(conversation_id)
     
     # Проверяем, принадлежит ли диалог текущему пользователю
     if conversation.user_id != current_user.id:
@@ -109,7 +109,7 @@ def share(conversation_id):
 @login_required
 def unshare(conversation_id):
     """Отключает шаринг диалога"""
-    conversation = Conversation.query.get_or_404(conversation_id)
+    conversation = db.session.query(Conversation).get_or_404(conversation_id)
     
     # Проверяем, принадлежит ли диалог текущему пользователю
     if conversation.user_id != current_user.id:
@@ -123,7 +123,7 @@ def unshare(conversation_id):
 @conversations_bp.route('/shared/<token>')
 def shared(token):
     """Отображает шаринговый диалог по токену"""
-    conversation = Conversation.query.filter_by(share_token=token).first_or_404()
+    conversation = db.session.query(Conversation).filter_by(share_token=token).first_or_404()
     
     if not conversation.is_shared:
         abort(404)

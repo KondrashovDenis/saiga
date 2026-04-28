@@ -29,7 +29,7 @@ def upload_file():
             return jsonify({'error': 'ID диалога обязателен'}), 400
         
         # Проверяем права доступа к диалогу
-        conversation = Conversation.query.get_or_404(conversation_id)
+        conversation = db.session.query(Conversation).get_or_404(conversation_id)
         if conversation.user_id != current_user.id:
             return jsonify({'error': 'Доступ запрещен'}), 403
         

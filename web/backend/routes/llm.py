@@ -24,12 +24,12 @@ def generate():
     user_message = data['message']
     
     # Проверяем существование диалога и права доступа
-    conversation = Conversation.query.get_or_404(conversation_id)
+    conversation = db.session.query(Conversation).get_or_404(conversation_id)
     if conversation.user_id != current_user.id:
         return jsonify({'error': 'Доступ запрещен'}), 403
     
     # Получаем настройки пользователя
-    settings = Setting.query.filter_by(user_id=current_user.id).first()
+    settings = db.session.query(Setting).filter_by(user_id=current_user.id).first()
     if not settings:
         settings = Setting(user_id=current_user.id)
         db.session.add(settings)
