@@ -96,3 +96,29 @@ metrics.vaibkod.ru {
         }
     }
 }
+
+# ──────────────── ARTK (MVP транспортной компании) ────────────────
+artk.retreathub.ru {
+    encode gzip zstd
+
+    # Django: API, админка, статика, медиа
+    @backend path /api/* /admin/* /static/* /media/*
+    handle @backend {
+        reverse_proxy artk_backend:8000 {
+            transport http {
+                read_timeout 60s
+                write_timeout 60s
+            }
+        }
+    }
+
+    # Next.js: всё остальное (фронт + его _next/* ассеты)
+    handle {
+        reverse_proxy artk_frontend:3000 {
+            transport http {
+                read_timeout 60s
+                write_timeout 60s
+            }
+        }
+    }
+}
