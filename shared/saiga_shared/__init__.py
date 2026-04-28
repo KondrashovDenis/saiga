@@ -4,6 +4,14 @@ from saiga_shared.models import (
     Conversation,
     Message,
     Setting,
+    TelegramLinkToken,
 )
 
-__all__ = ["Base", "User", "Conversation", "Message", "Setting"]
+__all__ = [
+    "Base",
+    "User",
+    "Conversation",
+    "Message",
+    "Setting",
+    "TelegramLinkToken",
+]
