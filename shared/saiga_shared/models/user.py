@@ -8,7 +8,6 @@ from sqlalchemy import (
     String,
 )
 from sqlalchemy.orm import relationship
-from werkzeug.security import check_password_hash, generate_password_hash
 
 from saiga_shared.models.base import Base
 
@@ -19,6 +18,9 @@ class User(Base):
     Используется и в web (через Flask-Login), и в bot. UserMixin интерфейс
     встроен напрямую (4 свойства: is_authenticated, is_active, is_anonymous,
     get_id) — чтобы shared не зависел от Flask.
+
+    werkzeug.security импортируется лениво — бот не использует password-методы,
+    а werkzeug в bot/requirements.txt не входит.
     """
 
     __tablename__ = "users"
@@ -73,14 +75,17 @@ class User(Base):
     def get_id(self) -> str:
         return str(self.id)
 
-    # ───────────── Password helpers ─────────────
+    # ───────────── Password helpers (web only — werkzeug lazy) ─────────────
     def set_password(self, password: str) -> None:
-        if password:
-            self.password_hash = generate_password_hash(password)
+        if not password:
+            return
+        from werkzeug.security import generate_password_hash
+        self.password_hash = generate_password_hash(password)
 
     def check_password(self, password: str) -> bool:
         if not self.password_hash:
             return False
+        from werkzeug.security import check_password_hash
         return check_password_hash(self.password_hash, password)
 
     # ───────────── Telegram linking ─────────────
