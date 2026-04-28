@@ -85,7 +85,7 @@ def inject_sidebar():
     if not current_user.is_authenticated:
         return {'sidebar_conversations': []}
     from models.conversation import Conversation
-    convs = (Conversation.query
+    convs = (db.session.query(Conversation)
              .filter_by(user_id=current_user.id)
              .order_by(Conversation.updated_at.desc())
              .limit(50)
