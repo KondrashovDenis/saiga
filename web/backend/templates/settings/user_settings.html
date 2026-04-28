@@ -7,58 +7,60 @@
     <form method="POST" action="{{ url_for('settings.user_settings') }}">
         {{ form.hidden_tag() }}
 
-        <div class="settings-card">
-            <h2>Параметры генерации</h2>
+        <div class="settings-grid">
+            <div class="settings-card">
+                <h2>Параметры генерации</h2>
 
-            <div class="field">
-                {{ form.temperature.label }}
-                {{ form.temperature(step="0.1") }}
-                <div style="font-size:11px; color:var(--tx-faint); margin-top:4px;">0.1 — точно, 0.7 — баланс, 1.0 — креативно</div>
-            </div>
-
-            <div class="field">
-                {{ form.top_p.label }}
-                {{ form.top_p(step="0.1") }}
-                <div style="font-size:11px; color:var(--tx-faint); margin-top:4px;">Разнообразие словаря (0.1–1.0)</div>
-            </div>
-        </div>
-
-        <div class="settings-card">
-            <h2>Профиль</h2>
-            <div style="font-size:14px; color:var(--tx-muted);">
-                <div>Имя: <span style="color:var(--tx);">{{ current_user.display_name }}</span></div>
-                {% if current_user.email %}
-                <div>Email: <span style="color:var(--tx);">{{ current_user.email }}</span></div>
-                {% endif %}
-                <div style="margin-top:6px;">
-                    Регистрация: {{ current_user.created_at.strftime('%d.%m.%Y') if current_user.created_at else '—' }}
+                <div class="field">
+                    {{ form.temperature.label }}
+                    {{ form.temperature(step="0.1") }}
+                    <div style="font-size:11px; color:var(--tx-faint); margin-top:4px;">0.1 — точно, 0.7 — баланс, 1.0 — креативно</div>
                 </div>
+
+                <div class="field">
+                    {{ form.top_p.label }}
+                    {{ form.top_p(step="0.1") }}
+                    <div style="font-size:11px; color:var(--tx-faint); margin-top:4px;">Разнообразие словаря (0.1–1.0)</div>
+                </div>
+            </div>
+
+            <div class="settings-card">
+                <h2>Профиль</h2>
+                <div style="font-size:14px; color:var(--tx-muted);">
+                    <div>Имя: <span style="color:var(--tx);">{{ current_user.display_name }}</span></div>
+                    {% if current_user.email %}
+                    <div>Email: <span style="color:var(--tx);">{{ current_user.email }}</span></div>
+                    {% endif %}
+                    <div style="margin-top:6px;">
+                        Регистрация: {{ current_user.created_at.strftime('%d.%m.%Y') if current_user.created_at else '—' }}
+                    </div>
+                </div>
+            </div>
+
+            {# ── Telegram-привязка (внутри grid'а, type=button — не сабмитит форму) ── #}
+            <div class="settings-card">
+                <h2>Telegram</h2>
+                <div id="tg-link-block" style="font-size:14px; color: var(--tx-muted);">
+                    {% if current_user.telegram_username %}
+                        <div>Привязан: <span style="color:var(--tx);">@{{ current_user.telegram_username }}</span></div>
+                        <button type="button" id="tg-unlink-btn" class="btn"
+                                style="margin-top: 10px; background:#7a1f1f; color:#fff;"
+                                {% if not current_user.can_login_with_password %}disabled title="Нельзя отвязать — это единственный способ входа. Установи пароль сначала."{% endif %}>
+                            Отвязать Telegram
+                        </button>
+                    {% else %}
+                        <div>Telegram не привязан. Привяжи, чтобы продолжать диалоги в боте под тем же аккаунтом.</div>
+                        <button type="button" id="tg-link-btn" class="btn" style="margin-top: 10px; background:#229ED9; color:#fff;">
+                            Привязать Telegram
+                        </button>
+                    {% endif %}
+                </div>
+                <div id="tg-status" style="font-size:12px; color: var(--tx-faint); margin-top: 8px; min-height: 18px;"></div>
             </div>
         </div>
 
         <button type="submit" class="btn">Сохранить</button>
     </form>
-
-    {# ── Управление Telegram-привязкой (отдельный блок, не часть формы) ── #}
-    <div class="settings-card" style="margin-top: 16px;">
-        <h2>Telegram</h2>
-        <div id="tg-link-block" style="font-size:14px; color: var(--tx-muted);">
-            {% if current_user.telegram_username %}
-                <div>Привязан: <span style="color:var(--tx);">@{{ current_user.telegram_username }}</span></div>
-                <button type="button" id="tg-unlink-btn" class="btn"
-                        style="margin-top: 10px; background:#7a1f1f;"
-                        {% if not current_user.can_login_with_password %}disabled title="Нельзя отвязать — это единственный способ входа. Установи пароль сначала."{% endif %}>
-                    Отвязать Telegram
-                </button>
-            {% else %}
-                <div>Telegram не привязан. Привяжи, чтобы продолжать диалоги в боте под тем же аккаунтом.</div>
-                <button type="button" id="tg-link-btn" class="btn" style="margin-top: 10px; background:#229ED9;">
-                    Привязать Telegram
-                </button>
-            {% endif %}
-        </div>
-        <div id="tg-status" style="font-size:12px; color: var(--tx-faint); margin-top: 8px; min-height: 18px;"></div>
-    </div>
 </div>
 
 <script>
