@@ -1,29 +1,28 @@
+# Build context = repo root (см. bot/docker-compose.yml).
+# shared/ — sibling папка с моделями, должна попасть в образ.
 FROM python:3.11-slim
 
-# Установка системных зависимостей
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Рабочая директория
 WORKDIR /app
 
-# Копируем requirements.txt
-COPY requirements.txt .
+# 1. shared package
+COPY shared/ /app/shared/
+RUN pip install --no-cache-dir -e /app/shared
 
-# Устанавливаем Python зависимости
-RUN pip install --no-cache-dir -r requirements.txt
+# 2. bot requirements
+COPY bot/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Копируем исходный код
-COPY src/ .
+# 3. bot исходники
+COPY bot/src/ /app/
 
-# Создаем директории для данных
 RUN mkdir -p /app/data /app/logs
 
-# Переменные окружения
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-# Запуск бота
 CMD ["python", "main.py"]

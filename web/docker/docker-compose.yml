@@ -1,6 +1,9 @@
 services:
   saiga-web-app:
-    build: ../backend
+    build:
+      # Context = root репо: shared/ должен попасть в build context рядом с web/.
+      context: ../..
+      dockerfile: web/backend/Dockerfile
     image: saiga-web:latest
     container_name: saiga-web-app
     restart: unless-stopped

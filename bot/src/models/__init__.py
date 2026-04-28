@@ -1,7 +1,15 @@
-from .database import init_db, get_session, get_or_create_user
-from .user import User  
-from .conversation import Conversation
-from .message import Message
-from .setting import Setting
+from .database import init_db, get_session, get_or_create_user, async_session, engine
+from saiga_shared.models import Base, User, Conversation, Message, Setting
 
-__all__ = ['init_db', 'get_session', 'get_or_create_user', 'User', 'Conversation', 'Message', 'Setting']
+__all__ = [
+    "Base",
+    "User",
+    "Conversation",
+    "Message",
+    "Setting",
+    "init_db",
+    "get_session",
+    "get_or_create_user",
+    "async_session",
+    "engine",
+]
