@@ -70,6 +70,12 @@ app.register_blueprint(file_upload_bp)
 
 # ──────────── context processors ────────────
 @app.context_processor
+def inject_asset_version():
+    # CSS/JS cache-busting: версия сбрасывается при каждом старте контейнера.
+    return {'asset_version': str(int(__import__('time').time()))}
+
+
+@app.context_processor
 def inject_now():
     return {'now': datetime.utcnow()}
 
