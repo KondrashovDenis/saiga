@@ -17,6 +17,10 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # FIX 2026-04-30: stub libcuda из CUDA 11.8 toolkit перебивает реальный
+      # driver хоста (535). LD_LIBRARY_PATH с приоритетом nvidia/current → driver
+      # 535.261 подцепляется, CUDA инициализируется, GPU задействуется (было 0%).
+      - LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/nvidia/current:/usr/local/cuda-11.8/lib64:/usr/local/cuda-11.8/targets/x86_64-linux/lib
     volumes:
       - ./models:/app/models
     networks:
