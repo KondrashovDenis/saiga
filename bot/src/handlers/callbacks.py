@@ -5,6 +5,7 @@
 """
 import logging
 import asyncio
+from datetime import datetime
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackQueryHandler, ContextTypes
@@ -13,7 +14,7 @@ from sqlalchemy import select, delete
 from keyboards.main_menu import MainMenuKeyboard
 from keyboards.settings import SettingsKeyboard
 from models.database import async_session, get_or_create_user
-from saiga_shared.models import Conversation, Message, Setting
+from saiga_shared.models import Conversation, Message, Setting, TelegramLinkToken, User
 from utils.conversation_manager import ConversationManager
 from handlers.text_handler import process_user_message
 
@@ -52,6 +53,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _confirm_delete(query, user, int(data.replace("confirm_delete_", "")))
     elif data.startswith("delete_confirmed_"):
         await _delete_confirmed(query, user, context, int(data.replace("delete_confirmed_", "")))
+    elif data.startswith("tg_link_confirm_"):
+        await _tg_link_confirm(query, user, data[len("tg_link_confirm_"):])
+    elif data.startswith("tg_login_confirm_"):
+        await _tg_login_confirm(query, user, data[len("tg_login_confirm_"):])
+    elif data == "tg_link_cancel":
+        await query.edit_message_text("❌ Отменено. Привязка не выполнена.")
     elif data == "settings":
         await _show_settings(query, user)
     elif data == "help":
@@ -80,6 +87,120 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Неизвестная команда: {data}",
             reply_markup=MainMenuKeyboard.get_keyboard(),
         )
+
+
+# ───────────────────────── TG link confirmation ─────────────────────────
+
+async def _tg_link_confirm(query, tg_user, token_str: str):
+    """Юзер нажал «Да, привязать» в подтверждении link-flow.
+
+    Здесь — реальная привязка после повторной валидации токена.
+    """
+    async with async_session() as session:
+        stmt = select(TelegramLinkToken).where(
+            TelegramLinkToken.token == token_str,
+            TelegramLinkToken.kind == "link",
+        )
+        tok = (await session.execute(stmt)).scalar_one_or_none()
+
+        if tok is None or tok.is_expired or tok.is_used:
+            await query.edit_message_text(
+                "❌ Ссылка истекла или уже использована. Запроси новую в веб-интерфейсе."
+            )
+            return
+
+        # Двойная проверка — TG пользователь не должен быть уже привязан к
+        # другому web-аккаунту (между показом prompt и нажатием кнопки могло
+        # что-то измениться).
+        existing_stmt = select(User).where(User.telegram_id == tg_user.id)
+        existing = (await session.execute(existing_stmt)).scalar_one_or_none()
+        if existing is not None and existing.id != tok.user_id:
+            await query.edit_message_text(
+                "❌ Этот Telegram уже привязан к другому аккаунту. Отвяжи там сначала."
+            )
+            return
+
+        target = await session.get(User, tok.user_id)
+        if target is None:
+            await query.edit_message_text("❌ Аккаунт для привязки не найден.")
+            return
+
+        target.link_telegram(
+            telegram_id=tg_user.id,
+            telegram_username=tg_user.username,
+            first_name=tg_user.first_name,
+            last_name=tg_user.last_name,
+        )
+        target.last_activity = datetime.utcnow()
+        tok.used_at = datetime.utcnow()
+        await session.commit()
+
+        logger.info("TG link confirmed: user_id=%s ↔ tg_id=%s", target.id, tg_user.id)
+
+    await query.edit_message_text(
+        f"✅ Аккаунт <b>{target.display_name}</b> успешно привязан!\n\n"
+        f"Возвращайся в веб — там уже видно привязку.",
+        parse_mode="HTML",
+        reply_markup=MainMenuKeyboard.get_keyboard(),
+    )
+
+
+async def _tg_login_confirm(query, tg_user, token_str: str):
+    """Юзер нажал «Войти в Saiga» в подтверждении login-flow.
+
+    Создаёт юзера если нет, заполняет user_id в токене → web сделает session.
+    """
+    from saiga_shared.models import Setting
+
+    async with async_session() as session:
+        stmt = select(TelegramLinkToken).where(
+            TelegramLinkToken.token == token_str,
+            TelegramLinkToken.kind == "login",
+        )
+        tok = (await session.execute(stmt)).scalar_one_or_none()
+
+        if tok is None or tok.is_expired or tok.is_used:
+            await query.edit_message_text(
+                "❌ Ссылка истекла или уже использована. Запроси новую в веб-интерфейсе."
+            )
+            return
+
+        # Найти или создать юзера по telegram_id.
+        user_stmt = select(User).where(User.telegram_id == tg_user.id)
+        db_user = (await session.execute(user_stmt)).scalar_one_or_none()
+
+        created = False
+        if db_user is None:
+            db_user = User(
+                telegram_id=tg_user.id,
+                telegram_username=tg_user.username,
+                first_name=tg_user.first_name,
+                last_name=tg_user.last_name,
+                language_code=tg_user.language_code or "ru",
+                auth_method="telegram",
+                email_verified=True,
+            )
+            session.add(db_user)
+            await session.commit()
+            await session.refresh(db_user)
+
+            settings = Setting(user_id=db_user.id)
+            session.add(settings)
+            await session.commit()
+            created = True
+
+        tok.user_id = db_user.id
+        tok.used_at = datetime.utcnow()
+        db_user.last_activity = datetime.utcnow()
+        await session.commit()
+
+        logger.info("TG login confirmed: user_id=%s tg_id=%s (created=%s)",
+                    db_user.id, tg_user.id, created)
+
+    msg = "✅ Вход подтверждён, возвращайся в браузер — ты залогинен."
+    if created:
+        msg += "\n\nДля тебя создан новый аккаунт. Все диалоги в боте и в вебе будут общими."
+    await query.edit_message_text(msg, reply_markup=MainMenuKeyboard.get_keyboard())
 
 
 # ───────────────────────── Conversations ─────────────────────────

@@ -1,0 +1,23 @@
+{% extends 'layout.html' %}
+{% set simple_layout = true %}
+{% block title %}Подтверждение email — saiga{% endblock %}
+{% block simple %}
+<div class="auth-card">
+    <h1>Подтвердить email</h1>
+    <p class="sub">Прислать ссылку для подтверждения ещё раз</p>
+
+    <form method="POST" action="{{ url_for('auth.resend_verify') }}">
+        {{ form.hidden_tag() }}
+        <div class="field">
+            {{ form.email.label }}
+            {{ form.email() }}
+            {% for e in form.email.errors %}<div style="color:var(--danger); font-size:12px; margin-top:4px;">{{ e }}</div>{% endfor %}
+        </div>
+        {{ form.submit(class="btn full") }}
+    </form>
+
+    <div class="auth-foot">
+        <a href="{{ url_for('auth.login') }}">← К входу</a>
+    </div>
+</div>
+{% endblock %}

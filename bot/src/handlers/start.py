@@ -6,18 +6,24 @@
   /start login_<token>          — войти в web через TG (deep-link)
 
 Токены живут в таблице telegram_link_tokens (см. saiga_shared.models).
+
+ВАЖНО (security fix 2026-04-29): мгновенная привязка убрана.
+Юзер видит сообщение "Подтвердить привязку к <display_name>?" с inline-кнопками
+[✅ Да] [❌ Отмена]. Это закрывает риск, что утёкший link-токен позволит
+атакующему /start'нуть его раньше владельца и присвоить чужой web-аккаунт.
+
+Реальная привязка происходит в обработчике callback'ов
+`tg_link_confirm_<token>` / `tg_login_confirm_<token>` (см. callbacks.py).
 """
 from datetime import datetime
 import logging
 
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CommandHandler, ContextTypes
 from sqlalchemy import select
 
-from models.database import async_session
-from models.user import User
-from models.setting import Setting
-from models.telegram_token import TelegramLinkToken
+from models.database import async_session, get_or_create_user
+from saiga_shared.models import TelegramLinkToken, User
 from keyboards.main_menu import MainMenuKeyboard
 
 logger = logging.getLogger(__name__)
@@ -49,6 +55,7 @@ WELCOME_BACK = "👋 С возвращением, {name}!\n\nГотов прод
 
 async def _ensure_user(session, tg_user):
     """Найти юзера по telegram_id, или создать нового."""
+    from saiga_shared.models import Setting
     stmt = select(User).where(User.telegram_id == tg_user.id)
     result = await session.execute(stmt)
     db_user = result.scalar_one_or_none()
@@ -61,6 +68,7 @@ async def _ensure_user(session, tg_user):
             last_name=tg_user.last_name,
             language_code=tg_user.language_code or "ru",
             auth_method="telegram",
+            email_verified=True,   # TG-only юзер не использует email-верификацию
         )
         session.add(db_user)
         await session.commit()
@@ -76,7 +84,7 @@ async def _ensure_user(session, tg_user):
     return db_user, False
 
 
-async def _load_valid_token(session, token: str, kind: str) -> TelegramLinkToken | None:
+async def _load_valid_token(session, token: str, kind: str):
     """Найти токен по строке. Возвращает None если нет / истёк / уже использован."""
     stmt = select(TelegramLinkToken).where(
         TelegramLinkToken.token == token,
@@ -91,8 +99,14 @@ async def _load_valid_token(session, token: str, kind: str) -> TelegramLinkToken
     return tok
 
 
+# ───────────────────────── LINK confirmation prompt ─────────────────────────
+
 async def _handle_link(update: Update, session, tg_user, token_str: str):
-    """Привязать TG к существующему web-юзеру."""
+    """Показать предложение подтвердить привязку TG → web-аккаунт.
+
+    Реальная привязка делается в callback `tg_link_confirm_<token>` после
+    нажатия inline-кнопки. До подтверждения никаких изменений в БД.
+    """
     tok = await _load_valid_token(session, token_str, "link")
     if tok is None:
         await update.message.reply_text(
@@ -112,33 +126,38 @@ async def _handle_link(update: Update, session, tg_user, token_str: str):
         )
         return
 
-    # Получаем целевого юзера и привязываем.
+    # Получаем целевого юзера для UI.
     target = await session.get(User, tok.user_id)
     if target is None:
         await update.message.reply_text("❌ Аккаунт для привязки не найден.")
         return
 
-    target.link_telegram(
-        telegram_id=tg_user.id,
-        telegram_username=tg_user.username,
-        first_name=tg_user.first_name,
-        last_name=tg_user.last_name,
-    )
-    target.last_activity = datetime.utcnow()
-    tok.used_at = datetime.utcnow()
-    await session.commit()
+    # Сохраняем имя для callback'а — display_name содержит first_name/username/email
+    # на основании того, что есть в web-аккаунте.
+    target_name = target.display_name
 
-    logger.info("TG link: user_id=%s ↔ tg_id=%s", target.id, tg_user.id)
+    # ВАЖНО: НЕ привязываем здесь. Показываем confirm.
+    keyboard = [
+        [InlineKeyboardButton("✅ Да, привязать", callback_data=f"tg_link_confirm_{token_str}")],
+        [InlineKeyboardButton("❌ Отмена", callback_data="tg_link_cancel")],
+    ]
     await update.message.reply_text(
-        f"✅ Аккаунт `{target.display_name}` успешно привязан!\n"
-        f"Возвращайся в веб — там уже видно привязку.",
-        parse_mode="Markdown",
-        reply_markup=MainMenuKeyboard.get_keyboard(),
+        f"🔗 <b>Подтверждение привязки Telegram</b>\n\n"
+        f"Привязать твой Telegram (@{tg_user.username or tg_user.first_name}) "
+        f"к аккаунту <b>{target_name}</b>?\n\n"
+        f"<i>Если это не ты инициировал — нажми «Отмена».</i>",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
+
+# ───────────────────────── LOGIN confirmation prompt ─────────────────────────
 
 async def _handle_login(update: Update, session, tg_user, token_str: str):
-    """Завершить web-логин через TG (создать юзера если нет, заполнить token.user_id)."""
+    """Показать предложение подтвердить вход в web через TG.
+
+    Сам логин делается в callback `tg_login_confirm_<token>`.
+    """
     tok = await _load_valid_token(session, token_str, "login")
     if tok is None:
         await update.message.reply_text(
@@ -147,19 +166,21 @@ async def _handle_login(update: Update, session, tg_user, token_str: str):
         )
         return
 
-    db_user, created = await _ensure_user(session, tg_user)
+    keyboard = [
+        [InlineKeyboardButton("✅ Войти в Saiga", callback_data=f"tg_login_confirm_{token_str}")],
+        [InlineKeyboardButton("❌ Отмена", callback_data="tg_link_cancel")],
+    ]
+    await update.message.reply_text(
+        f"🔐 <b>Вход в Saiga AI через Telegram</b>\n\n"
+        f"Войти в saiga.vaibkod.ru как "
+        f"<b>@{tg_user.username or tg_user.first_name}</b>?\n\n"
+        f"<i>Если это не ты инициировал — нажми «Отмена».</i>",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
 
-    tok.user_id = db_user.id
-    tok.used_at = datetime.utcnow()
-    db_user.last_activity = datetime.utcnow()
-    await session.commit()
 
-    logger.info("TG login: user_id=%s tg_id=%s (created=%s)", db_user.id, tg_user.id, created)
-    msg = "✅ Вход подтверждён, возвращайся в браузер — ты залогинен."
-    if created:
-        msg += "\n\nДля тебя создан новый аккаунт. Все диалоги в боте и в вебе будут общими."
-    await update.message.reply_text(msg, reply_markup=MainMenuKeyboard.get_keyboard())
-
+# ───────────────────────── /start dispatcher ─────────────────────────
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start с поддержкой deep-link."""
@@ -168,7 +189,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     arg = args[0] if args else ""
 
     async with async_session() as session:
-        # Deep-link сценарии — НЕ создают юзера автоматически до проверки токена.
+        # Deep-link сценарии — НЕ создают юзера и НЕ привязывают до подтверждения.
         if arg.startswith("link_"):
             await _handle_link(update, session, tg_user, arg[len("link_"):])
             return

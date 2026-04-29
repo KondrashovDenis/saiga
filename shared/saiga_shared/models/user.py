@@ -43,6 +43,9 @@ class User(Base):
     last_activity = Column(DateTime, default=datetime.utcnow)
     is_admin = Column(Boolean, default=False)
     is_active_user = Column("is_active", Boolean, default=True)
+    # Подтверждён ли email через ссылку. Для telegram-only юзеров не используется
+    # (TG-аккаунт верифицирован самим Telegram). См. needs_email_verification.
+    email_verified = Column(Boolean, default=False, nullable=False)
 
     # 'email', 'telegram', 'both'
     auth_method = Column(String(20), default="email")
@@ -87,6 +90,15 @@ class User(Base):
             return False
         from werkzeug.security import check_password_hash
         return check_password_hash(self.password_hash, password)
+
+    @property
+    def needs_email_verification(self) -> bool:
+        """True если юзер логинится паролем и email ещё не подтверждён.
+
+        Для telegram-only юзеров (auth_method='telegram', нет password_hash)
+        возвращает False — TG сам по себе верификация.
+        """
+        return bool(self.password_hash) and not self.email_verified
 
     # ───────────── Telegram linking ─────────────
     def link_telegram(self, telegram_id, telegram_username=None,
