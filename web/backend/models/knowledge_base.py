@@ -1,9 +1,3 @@
-from saiga_shared.models.base import Base
-from saiga_shared.models.user import User
-from saiga_shared.models.conversation import Conversation
-from saiga_shared.models.message import Message
-from saiga_shared.models.setting import Setting
-from saiga_shared.models.telegram_token import TelegramLinkToken
 from saiga_shared.models.knowledge_base import KnowledgeBase
 from saiga_shared.models.document import (
     Document,
@@ -15,18 +9,12 @@ from saiga_shared.models.document import (
 from saiga_shared.models.chunk import Chunk, CHUNK_EMBEDDING_DIM
 
 __all__ = [
-    "Base",
-    "User",
-    "Conversation",
-    "Message",
-    "Setting",
-    "TelegramLinkToken",
     "KnowledgeBase",
     "Document",
+    "Chunk",
     "DOCUMENT_STATUS_PENDING",
     "DOCUMENT_STATUS_PROCESSING",
     "DOCUMENT_STATUS_READY",
     "DOCUMENT_STATUS_FAILED",
-    "Chunk",
     "CHUNK_EMBEDDING_DIM",
 ]

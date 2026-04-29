@@ -5,6 +5,9 @@
 # Привилегии:
 #   saiga_admin (POSTGRES_USER) — суперюзер, для бэкапов/миграций
 #   saiga_app                   — владелец БД saiga (web + bot пишут под ним)
+#
+# pgvector: extension создаётся под saiga_admin (требует superuser), а после
+# этого таблицы / индексы создаются нашим Alembic под saiga_app — owner БД.
 set -e
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
@@ -17,6 +20,12 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
 
     -- На существующую схему public — все права.
     GRANT ALL ON SCHEMA public TO saiga_app;
+
+    -- pgvector — требует superuser. saiga_app не суперюзер, поэтому
+    -- CREATE EXTENSION делаем здесь, под saiga_admin (POSTGRES_USER).
+    -- На существующих БД (где init.sh уже отработал) extension включается
+    -- разово вручную: docker exec saiga-postgres psql -U saiga_admin -d saiga -c "CREATE EXTENSION IF NOT EXISTS vector"
+    CREATE EXTENSION IF NOT EXISTS vector;
 EOSQL
 
-echo "init.sh: saiga_app created, owner of $POSTGRES_DB"
+echo "init.sh: saiga_app created, owner of $POSTGRES_DB; pgvector enabled"

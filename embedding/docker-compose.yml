@@ -1,0 +1,33 @@
+services:
+  saiga-embedding:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: saiga-embedding:latest
+    container_name: saiga-embedding
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # EMBEDDING_API_KEY и EMBEDDING_MODEL — из .env
+      HF_HOME: /models
+      SENTENCE_TRANSFORMERS_HOME: /models
+    volumes:
+      # Веса модели на named volume — переживают rebuild контейнера.
+      # ~2.2 GB для multilingual-e5-large.
+      - embedding-models:/models
+    networks:
+      # saiga-internal — web/bot/sochispirit-app достучатся к /embed
+      - saiga-internal
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s    # первый load модели может быть медленным
+
+volumes:
+  embedding-models:
+
+networks:
+  saiga-internal:
+    external: true

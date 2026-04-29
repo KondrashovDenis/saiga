@@ -71,6 +71,7 @@ from routes.llm import llm_bp
 from routes.settings import settings_bp
 from routes.telegram_auth import telegram_auth_bp
 from routes.file_upload import file_upload_bp
+from routes.kb import kb_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(conversations_bp)
@@ -79,6 +80,7 @@ app.register_blueprint(llm_bp)
 app.register_blueprint(settings_bp)
 app.register_blueprint(telegram_auth_bp)
 app.register_blueprint(file_upload_bp)
+app.register_blueprint(kb_bp)
 
 
 # Anonymous Telegram endpoints — exempt от CSRF

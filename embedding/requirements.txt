@@ -1,0 +1,10 @@
+# torch ставится ОТДЕЛЬНЫМ pip-вызовом в Dockerfile (см. там --index-url для CPU-only).
+# Если перенести его сюда с --extra-index-url, pip может тянуть GPU-версию с pypi.
+
+# FastAPI + ASGI server
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.9.2
+
+# Sentence-transformers тянет за собой transformers; torch ставим отдельно (CPU-only).
+sentence-transformers==3.3.1
