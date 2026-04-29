@@ -13,9 +13,24 @@
     email {$LE_EMAIL}
 }
 
+# ──────────────── Reusable security-headers snippet ────────────────
+# Подключение в site-блоке: `import security_headers`.
+# CSP подбирается отдельно для каждого сайта (разные inline-скрипты).
+(security_base) {
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        -Server
+    }
+}
+
 # ──────────────── LANDING (Wagtail CMS) ────────────────
 vaibkod.ru, www.vaibkod.ru {
     encode gzip zstd
+    import security_base
     reverse_proxy vaibkod-cms:8000 {
         transport http {
             read_timeout 60s
@@ -31,6 +46,12 @@ vaibkod.ru, www.vaibkod.ru {
 # ──────────────── WEB-APP ────────────────
 saiga.vaibkod.ru {
     encode gzip zstd
+    import security_base
+    header {
+        # Inline <script> блоки в layout.html / login.html / settings.html
+        # требуют 'unsafe-inline'. Когда вынесем во внешний .js — удалить.
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    }
     reverse_proxy saiga-web-app:5000 {
         transport http {
             read_timeout 60s
@@ -42,6 +63,7 @@ saiga.vaibkod.ru {
 # ──────────────── LLM API (Bearer-auth) ────────────────
 llm.vaibkod.ru {
     encode gzip zstd
+    import security_base
 
     @authorized header Authorization "Bearer {$LLM_API_KEY}"
 
@@ -65,6 +87,7 @@ llm.vaibkod.ru {
 # ──────────────── LLM Web UI (HTTP Basic Auth) ────────────────
 saigaui.vaibkod.ru {
     encode gzip zstd
+    import security_base
 
     basic_auth {
         denciao $2a$14$rdiH8msX3HizdEeaIT6/Lux38mc0dAB2tDmM5xQIngE2EaSXbNsEm
@@ -84,6 +107,7 @@ saigaui.vaibkod.ru {
 # второй слой — собственный Grafana login (см. monitoring/.env).
 metrics.vaibkod.ru {
     encode gzip zstd
+    import security_base
 
     basic_auth {
         denciao $2a$14$OxmZ1HLJFcA7NFZrItGO0.X33nUEUNM/T0xRwDpDl3/uozf0e82AG
@@ -101,8 +125,21 @@ metrics.vaibkod.ru {
 artk.retreathub.ru {
     encode gzip zstd
 
-    # Django: API, админка, статика, медиа
-    @backend path /api/* /admin/* /static/* /media/*
+    # REC-1: security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "same-origin"
+        # Минимальный CSP — Next.js нуждается в inline-скриптах
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'"
+        # Скрываем мета-инфо
+        -Server
+        -X-Powered-By
+    }
+
+    # Django: API, админка, статика (whitenoise), медиа
+    @backend path /api/* /admin/* /static/* /media/* /healthz
     handle @backend {
         reverse_proxy artk_backend:8000 {
             transport http {

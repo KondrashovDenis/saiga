@@ -5,6 +5,7 @@
     <h1>Новый диалог</h1>
     <p>Дай ему название, чтобы потом найти в списке слева.</p>
     <form method="POST" action="{{ url_for('conversations.new') }}" style="width: 100%; max-width: 360px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="field">
             <input type="text" name="title" placeholder="Название (например: «План недели»)" required autofocus>
         </div>

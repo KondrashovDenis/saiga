@@ -42,7 +42,8 @@
 
 <script>
 (function() {
-    // Deep-link Telegram login: POST /login/start → редирект в t.me, потом poll.
+    // Deep-link Telegram login: POST /api/telegram/login/start → редирект в t.me, потом poll.
+    // /api/telegram/login/start — anonymous endpoint, exempt от CSRF (см. app.py).
     const btn = document.getElementById('tg-login-btn');
     const statusEl = document.getElementById('tg-login-status');
     let pollTimer = null;

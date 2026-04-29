@@ -74,13 +74,17 @@
     const linkBtn = document.getElementById('tg-link-btn');
     const unlinkBtn = document.getElementById('tg-unlink-btn');
     const statusEl = document.getElementById('tg-status');
+    const csrf = document.querySelector('meta[name=csrf-token]').content;
     let pollTimer = null;
 
     async function startLink() {
         linkBtn.disabled = true;
         statusEl.textContent = '...';
         try {
-            const r = await fetch('/api/telegram/link/start', { method: 'POST' });
+            const r = await fetch('/api/telegram/link/start', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrf },
+            });
             if (r.status === 409) {
                 statusEl.textContent = 'Уже привязан. Перезагрузи страницу.';
                 return;
@@ -129,7 +133,10 @@
         if (!confirm('Отвязать Telegram-аккаунт?')) return;
         unlinkBtn.disabled = true;
         try {
-            const r = await fetch('/api/telegram/unlink', { method: 'POST' });
+            const r = await fetch('/api/telegram/unlink', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrf },
+            });
             if (!r.ok) {
                 const d = await r.json().catch(() => ({}));
                 statusEl.textContent = d.message || 'Ошибка отвязывания.';

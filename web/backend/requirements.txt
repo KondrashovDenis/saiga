@@ -4,11 +4,15 @@ Flask-SQLAlchemy==3.1.1
 Flask-Login==0.6.2
 Flask-WTF==1.2.1
 Flask-Migrate==4.0.5
+Flask-Limiter==3.8.0
 Werkzeug==2.3.7
 
 # Взаимодействие с БД
 SQLAlchemy==2.0.23
 alembic==1.12.1
+
+# Redis (для Flask-Limiter storage)
+redis==5.0.8
 
 # HTTP клиент для взаимодействия с LLM API
 requests==2.31.0
@@ -26,7 +30,7 @@ gunicorn==21.2.0
 
 # Обработка документов и файлов
 PyPDF2==3.0.1
-python-docx==1.1.0  
+python-docx==1.1.0
 python-magic==0.4.27
 pydub==0.25.1
 SpeechRecognition==3.10.0

@@ -4,6 +4,7 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_required, current_user
 
 from database import db
+from extensions import limiter
 from models.conversation import Conversation
 from models.message import Message
 from models.setting import Setting
@@ -13,6 +14,7 @@ llm_bp = Blueprint('llm', __name__, url_prefix='/api/llm')
 
 @llm_bp.route('/generate', methods=['POST'])
 @login_required
+@limiter.limit("20 per minute; 200 per hour")
 def generate():
     """Отправляет запрос к LLM и сохраняет ответ"""
     data = request.get_json()

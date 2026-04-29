@@ -22,9 +22,13 @@ services:
     networks:
       - default
     shm_size: '64gb'
-    ports:
-      - "7860:7860"
-      - "5000:5000"
+    # ports НЕ публикуются на хост — Caddy ходит к saiga-llm:5000 и :7860
+    # через docker network nginx-proxy. Публикация на 0.0.0.0 обходила бы
+    # Caddy auth для всех в LAN (Docker bypass UFW). Внутри сети контейнеры
+    # друг друга видят по имени без публикации.
+    expose:
+      - "5000"
+      - "7860"
     # Stub-симлинк на libcuda.so убран из Dockerfile — entrypoint-костыль больше
     # не нужен. Запуск идёт через стандартный nvidia_entrypoint.sh из base-образа,
     # CMD задаётся ниже.

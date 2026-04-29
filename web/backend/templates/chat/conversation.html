@@ -19,6 +19,7 @@
     const btn = document.getElementById('renameBtn');
     const titleEl = document.getElementById('convTitle');
     if (!btn || !titleEl) return;
+    const csrf = document.querySelector('meta[name=csrf-token]').content;
     btn.addEventListener('click', async () => {
         const current = titleEl.textContent.trim();
         const next = prompt('Новое название диалога:', current);
@@ -27,7 +28,7 @@
         try {
             const r = await fetch(`/conversations/${id}/rename`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
                 body: JSON.stringify({ title: next.trim() }),
             });
             if (!r.ok) { alert('Ошибка: ' + r.status); return; }
@@ -102,6 +103,7 @@
         <div class="modal-actions">
             <button type="button" class="btn btn-secondary" onclick="document.getElementById('deleteModal').classList.remove('open')">Отмена</button>
             <form action="{{ url_for('conversations.delete', conversation_id=conversation.id) }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-danger">Удалить</button>
             </form>
         </div>

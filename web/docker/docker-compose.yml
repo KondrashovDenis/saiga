@@ -1,4 +1,19 @@
 services:
+  saiga-web-redis:
+    image: redis:7.4-alpine
+    container_name: saiga-web-redis
+    restart: unless-stopped
+    # Redis нужен Flask-Limiter для счётчиков rate-limit.
+    # Локальный, без пароля — слушает только в saiga-internal сети, наружу не торчит.
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "32mb", "--maxmemory-policy", "allkeys-lru"]
+    networks:
+      - saiga-internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   saiga-web-app:
     build:
       # Context = root репо: shared/ должен попасть в build context рядом с web/.
@@ -10,16 +25,20 @@ services:
     env_file: ../.env
     environment:
       - LLM_API_URL=http://saiga-llm:5000/v1/chat/completions
+      - RATELIMIT_STORAGE_URI=redis://saiga-web-redis:6379/0
     networks:
       - nginx-proxy        # Caddy → web
-      - saiga-internal     # web → postgres
-    # depends_on не используем — postgres в отдельном compose-проекте.
+      - saiga-internal     # web → postgres + redis
+    depends_on:
+      saiga-web-redis:
+        condition: service_healthy
+    # postgres в отдельном compose-проекте.
     # Запуск: сначала ~/projects/saiga/postgres, потом web.
 
 networks:
   # Caddy <-> web
   nginx-proxy:
     external: true
-  # web <-> postgres (создаётся в postgres/docker-compose.yml)
+  # web <-> postgres + redis (создаётся в postgres/docker-compose.yml)
   saiga-internal:
     external: true

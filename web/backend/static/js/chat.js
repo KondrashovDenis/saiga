@@ -15,6 +15,10 @@
 
   if (!messages) return;
 
+  // CSRF token из <meta> в layout.html — добавляется в каждый mutating fetch.
+  const CSRF_META = document.querySelector('meta[name=csrf-token]');
+  const CSRF = CSRF_META ? CSRF_META.content : '';
+
   const conversationId = messages.dataset.conversationId;
   const userInitial = (function () {
     const a = document.querySelector('.sb-avatar');
@@ -47,13 +51,18 @@
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
+  // Whitelist схем для markdown-ссылок. Блокирует javascript:, data:, file:, etc.
+  // Разрешает: http(s)://, mailto:, относительные (/path), якоря (#id).
+  const SAFE_URL_RE = /^(https?:\/\/|mailto:|\/|#)/i;
+  const safeUrl = (u) => SAFE_URL_RE.test(u) ? u : '#';
+
   function renderInline(s) {
     s = s.replace(/`([^`\n]+)`/g, (_, c) => `<code>${escapeHtml(c)}</code>`);
     s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
     s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
     s = s.replace(/(^|\W)_([^_\n]+)_(?!\w)/g, '$1<em>$2</em>');
     s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, t, u) =>
-      `<a href="${escapeHtml(u)}" target="_blank" rel="noopener">${t}</a>`);
+      `<a href="${escapeHtml(safeUrl(u))}" target="_blank" rel="noopener noreferrer">${t}</a>`);
     return s;
   }
 
@@ -240,12 +249,14 @@
 
     try {
       const r1 = await fetch(`/api/conversations/${conversationId}/messages`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
         body: JSON.stringify({ content: text })
       });
       if (!r1.ok) throw new Error('Не удалось сохранить сообщение');
       const r2 = await fetch('/api/llm/generate', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
         body: JSON.stringify({ conversation_id: conversationId, message: text })
       });
       const data = await r2.json();
@@ -282,7 +293,11 @@
       fd.append('file', file);
       fd.append('conversation_id', conversationId);
       try {
-        const r = await fetch('/api/files/upload', { method: 'POST', body: fd });
+        const r = await fetch('/api/files/upload', {
+          method: 'POST',
+          headers: { 'X-CSRFToken': CSRF },
+          body: fd,
+        });
         const data = await r.json();
         if (data.extracted_text) await send(`📄 ${file.name}:\n\n${data.extracted_text}`);
         else showError(data.error || 'Не удалось обработать файл');
@@ -294,7 +309,10 @@
   if (shareBtn) {
     shareBtn.addEventListener('click', async () => {
       try {
-        const r = await fetch(`/conversations/${conversationId}/share`, { method: 'POST' });
+        const r = await fetch(`/conversations/${conversationId}/share`, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': CSRF },
+        });
         const data = await r.json();
         document.getElementById('shareLink').value = data.shareUrl;
         document.getElementById('shareModal').classList.add('open');

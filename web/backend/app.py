@@ -3,9 +3,11 @@ from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for
 from markupsafe import Markup
 from flask_login import LoginManager, current_user
+from flask_wtf.csrf import CSRFProtect, generate_csrf
 
 from config import Config
 from database import init_db, db
+from extensions import limiter
 
 
 # ────────────── Sentry ──────────────
@@ -27,6 +29,17 @@ if Config.SENTRY_DSN:
 
 app = Flask(__name__)
 app.config.from_object(Config)
+
+
+# ────────────── CSRF protection ──────────────
+csrf = CSRFProtect(app)
+
+
+# ────────────── Rate limiting ──────────────
+# Backend: redis://saiga-web-redis:6379/0 — отдельный контейнер на homeserver.
+# Если Redis недоступен — Flask-Limiter падает в in-memory fallback с warning'ом
+# (не блокирует startup web-app).
+limiter.init_app(app)
 
 
 @app.template_filter('nl2br')
@@ -68,7 +81,24 @@ app.register_blueprint(telegram_auth_bp)
 app.register_blueprint(file_upload_bp)
 
 
+# Anonymous Telegram endpoints — exempt от CSRF
+# (login_start вызывается до того как юзер залогинен — нет сессии для CSRF-токена).
+# login_status — GET, CSRF не применяется по умолчанию.
+from routes import telegram_auth as _tg_routes
+csrf.exempt(_tg_routes.login_start)
+
+
 # ──────────── context processors ────────────
+@app.context_processor
+def inject_csrf_token():
+    """Пробрасываем csrf_token() в шаблоны для JS fetch'ей.
+
+    В шаблоне: <meta name="csrf-token" content="{{ csrf_token() }}">
+    В JS:      headers: {'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content}
+    """
+    return {'csrf_token': generate_csrf}
+
+
 @app.context_processor
 def inject_asset_version():
     # CSS/JS cache-busting: версия сбрасывается при каждом старте контейнера.
@@ -114,6 +144,13 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/healthz')
+@limiter.exempt
+def healthz():
+    """Health-check для мониторинга. Не требует БД-запроса (быстрее)."""
+    return {'status': 'ok'}, 200
+
+
 @app.route('/sentry-debug')
 def trigger_error():
     """Тестовая точка для проверки что Sentry ловит exceptions.
@@ -130,6 +167,15 @@ def page_not_found(e):
                            error_message='Страница не найдена'), 404
 
 
+@app.errorhandler(429)
+def rate_limited(e):
+    """Превышен rate-limit. Возвращаем JSON для API и HTML для страниц."""
+    if request.path.startswith('/api/') or request.is_json:
+        return {'error': 'rate_limited', 'message': 'Слишком много запросов. Попробуйте позже.'}, 429
+    return render_template('error.html', error_code=429,
+                           error_message='Слишком много запросов. Попробуйте позже.'), 429
+
+
 @app.errorhandler(500)
 def internal_server_error(e):
     return render_template('error.html', error_code=500,
@@ -137,6 +183,4 @@ def internal_server_error(e):
 
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     app.run(host='0.0.0.0', port=5000, debug=False)

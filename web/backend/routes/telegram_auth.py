@@ -17,6 +17,7 @@ from flask_login import current_user, login_required, login_user
 
 from config import Config
 from database import db
+from extensions import limiter
 from models.telegram_token import TelegramLinkToken
 from models.user import User
 
@@ -32,6 +33,7 @@ def _bot_url(token: str, kind: str) -> str:
 
 @telegram_auth_bp.route("/link/start", methods=["POST"])
 @login_required
+@limiter.limit("10 per hour")
 def link_start():
     """Создаёт link-токен и возвращает t.me URL.
 
@@ -66,6 +68,7 @@ def link_status():
 
 @telegram_auth_bp.route("/unlink", methods=["POST"])
 @login_required
+@limiter.limit("5 per hour")
 def unlink():
     """Отвязать Telegram. Запрет если это единственный способ входа."""
     if not current_user.can_login_with_password:
@@ -84,13 +87,16 @@ def unlink():
 # ───────────────────────── LOGIN (первичный вход через Telegram) ─────────────
 
 @telegram_auth_bp.route("/login/start", methods=["POST"])
+@limiter.limit("5 per minute; 30 per hour")
 def login_start():
     """Создаёт login-токен (без user_id) для anonymous-юзера.
 
     Юзер открывает t.me URL, бот спрашивает подтверждение, по подтверждению
     создаёт/находит юзера по telegram_id и проставляет user_id в токен.
+
+    NB: exempt от CSRF в app.py (anonymous endpoint, нет сессии для CSRF-токена).
+    Защита от спама — rate-limit по IP.
     """
-    # TODO(security): добавить rate limit по IP (5/мин) — пока MVP.
     tok = TelegramLinkToken.generate(kind="login", user_id=None)
     db.session.add(tok)
     db.session.commit()

@@ -22,8 +22,28 @@ class Config:
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # Flask-Login
+    # ─────────── Cookie / Session security ───────────
+    # Caddy у нас auto-redirect на HTTPS, поэтому Secure безопасно.
+    # SameSite=Lax — позволяет нормальные top-level навигации, но блокирует
+    # большинство CSRF-атак с cross-origin POST.
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    REMEMBER_COOKIE_SECURE = True
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = 'Lax'
     REMEMBER_COOKIE_DURATION = timedelta(days=14)
+    PERMANENT_SESSION_LIFETIME = timedelta(days=14)
+
+    # ─────────── CSRF (Flask-WTF) ───────────
+    # SECRET_KEY используется для подписи токенов.
+    WTF_CSRF_TIME_LIMIT = None  # токен живёт пока активна сессия
+    WTF_CSRF_SSL_STRICT = True
+
+    # ─────────── Body size ───────────
+    # 16MB hard-cap (file upload сам ограничивает 10MB, но Flask должен иметь
+    # верхний предел чтобы не ловить медленный 100MB-pipe).
+    MAX_CONTENT_LENGTH = 16 * 1024 * 1024
 
     # LLM API — внутри docker network к saiga-llm:5000
     LLM_API_URL = os.environ.get('LLM_API_URL', 'http://saiga-llm:5000/v1/chat/completions')
@@ -39,6 +59,13 @@ class Config:
     SENTRY_DSN = os.environ.get('SENTRY_DSN')
     SENTRY_ENV = os.environ.get('SENTRY_ENV', 'production')
     SENTRY_RELEASE = os.environ.get('SENTRY_RELEASE')
+
+    # Rate limiting (Flask-Limiter)
+    # Backend: redis://saiga-web-redis:6379/0 — отдельный контейнер на homeserver
+    # (на debianOCR живёт saiga-bot-redis, к нему web не дотянется).
+    RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI', 'redis://saiga-web-redis:6379/0')
+    RATELIMIT_STRATEGY = 'fixed-window'
+    RATELIMIT_HEADERS_ENABLED = True
 
     # Лимиты
     MAX_CONVERSATIONS_PER_USER = 50

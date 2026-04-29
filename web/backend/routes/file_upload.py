@@ -5,6 +5,7 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 
 from database import db
+from extensions import limiter
 from models.conversation import Conversation
 from models.message import Message
 from utils.document_processor import DocumentProcessor
@@ -15,6 +16,7 @@ file_upload_bp = Blueprint('file_upload', __name__, url_prefix='/api/files')
 
 @file_upload_bp.route('/upload', methods=['POST'])
 @login_required
+@limiter.limit("20 per hour; 100 per day")
 def upload_file():
     """Загрузка и обработка файла"""
     try:
@@ -80,7 +82,7 @@ def upload_file():
             if temp_path and os.path.exists(temp_path):
                 try:
                     os.unlink(temp_path)
-                except:
+                except OSError:
                     pass
     
     except Exception as e:
