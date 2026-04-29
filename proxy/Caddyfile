@@ -28,15 +28,42 @@
 }
 
 # ──────────────── LANDING (Wagtail CMS) ────────────────
+# /admin/* и /django-admin/* за basic_auth (второй слой поверх Wagtail login).
+# Пароль для basic_auth: ~/projects/vaibkod-landing/cms/docker/supss/admin-basic-auth.txt
 vaibkod.ru, www.vaibkod.ru {
     encode gzip zstd
     import security_base
-    reverse_proxy vaibkod-cms:8000 {
-        transport http {
-            read_timeout 60s
-            write_timeout 60s
+    header {
+        # Wagtail admin требует unsafe-inline для inline JS/CSS из кода.
+        # Внешний сайт тоже имеет inline стили (inline style="..." в шаблонах).
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src 'self' fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    }
+    request_body {
+        max_size 5MB
+    }
+
+    @admin path /admin* /django-admin*
+    handle @admin {
+        basic_auth {
+            denciao $2a$14$geOtkdVDz2yaznvlcWUwBObNZugi9.EltRS.vXbbu6HSx6iPMLc0O
+        }
+        reverse_proxy vaibkod-cms:8000 {
+            transport http {
+                read_timeout 60s
+                write_timeout 60s
+            }
         }
     }
+
+    handle {
+        reverse_proxy vaibkod-cms:8000 {
+            transport http {
+                read_timeout 60s
+                write_timeout 60s
+            }
+        }
+    }
+
     log {
         output stdout
         format console
@@ -139,7 +166,7 @@ artk.retreathub.ru {
     }
 
     # Django: API, админка, статика (whitenoise), медиа
-    @backend path /api/* /admin/* /static/* /media/* /healthz
+    @backend path_regexp ^/(api|admin|static|media|healthz)
     handle @backend {
         reverse_proxy artk_backend:8000 {
             transport http {
