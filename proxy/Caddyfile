@@ -186,3 +186,30 @@ artk.retreathub.ru {
         }
     }
 }
+
+# ──────────────── Embedding API (Bearer-auth) ────────────────
+# saiga-embedding (multilingual-e5-large) для внешних клиентов: Glow на debianOCR,
+# будущие проекты. Bearer = EMBEDDING_API_KEY (см. embedding/.env, sync с клиентом).
+# Внутри docker-сети homeserver web/bot ходят напрямую через saiga-internal,
+# не через этот блок.
+embedding.vaibkod.ru {
+    encode gzip zstd
+    import security_base
+
+    @authorized header Authorization "Bearer {$EMBEDDING_API_KEY}"
+
+    handle @authorized {
+        reverse_proxy saiga-embedding:8000 {
+            transport http {
+                read_timeout 60s
+                write_timeout 60s
+            }
+        }
+    }
+
+    handle {
+        respond "Unauthorized" 401 {
+            close
+        }
+    }
+}

@@ -16,8 +16,11 @@ services:
       # ~2.2 GB для multilingual-e5-large.
       - embedding-models:/models
     networks:
-      # saiga-internal — web/bot/sochispirit-app достучатся к /embed
+      # saiga-internal — web/bot достучатся к /embed напрямую (внутри хоста)
       - saiga-internal
+      # nginx-proxy — Caddy достанет для embedding.vaibkod.ru
+      # (внешние клиенты на debianOCR через HTTPS Bearer)
+      - nginx-proxy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
       interval: 30s
@@ -30,4 +33,6 @@ volumes:
 
 networks:
   saiga-internal:
+    external: true
+  nginx-proxy:
     external: true
