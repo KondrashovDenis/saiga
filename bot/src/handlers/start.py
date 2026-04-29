@@ -15,14 +15,13 @@
 Реальная привязка происходит в обработчике callback'ов
 `tg_link_confirm_<token>` / `tg_login_confirm_<token>` (см. callbacks.py).
 """
-from datetime import datetime
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CommandHandler, ContextTypes
 from sqlalchemy import select
 
-from models.database import async_session, get_or_create_user
+from models.database import async_session
 from saiga_shared.models import TelegramLinkToken, User
 from keyboards.main_menu import MainMenuKeyboard
 
