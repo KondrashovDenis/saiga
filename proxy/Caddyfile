@@ -213,3 +213,26 @@ embedding.vaibkod.ru {
         }
     }
 }
+
+imagegen.vaibkod.ru {
+    encode gzip zstd
+    import security_base
+
+    @authorized header Authorization "Bearer {$IMAGEGEN_API_KEY}"
+
+    handle @authorized {
+        reverse_proxy saiga-imagegen:8000 {
+            transport http {
+                # ControlNet генерация может занять до 60 сек
+                read_timeout 180s
+                write_timeout 180s
+            }
+        }
+    }
+
+    handle {
+        respond "Unauthorized" 401 {
+            close
+        }
+    }
+}
