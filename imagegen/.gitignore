@@ -1,0 +1,4 @@
+models/
+test_generation*.png
+*.bak
+.env

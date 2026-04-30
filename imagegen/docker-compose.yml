@@ -1,0 +1,37 @@
+services:
+  saiga-imagegen:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: saiga-imagegen:latest
+    pull_policy: never
+    container_name: saiga-imagegen
+    restart: unless-stopped
+    runtime: nvidia
+    environment:
+      # GPU 2 — освобождена в 5.1 от Saiga LLM
+      - NVIDIA_VISIBLE_DEVICES=2
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # тот же фикс что в saiga-llm: stub libcuda из CUDA toolkit перебивает driver
+      - LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/nvidia/current:/usr/local/cuda-11.8/lib64:/usr/local/cuda-11.8/targets/x86_64-linux/lib
+      # HF download
+      - HF_HOME=/models/hf_cache
+      - HF_HUB_DISABLE_TELEMETRY=1
+    volumes:
+      - ./models:/models  # persistent cache для SD/ControlNet/LoRA
+    networks:
+      - default
+    expose:
+      - "8000"
+    shm_size: '4gb'
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,json; r=urllib.request.urlopen('http://localhost:8000/healthz', timeout=2); d=json.loads(r.read()); exit(0 if d.get('status')=='ok' else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 600s  # 10 минут на первую загрузку модели
+
+networks:
+  default:
+    name: nginx-proxy
+    external: true
