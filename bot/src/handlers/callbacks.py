@@ -39,9 +39,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     user = update.effective_user
 
-    if data == "new_conversation":
-        await _new_conversation(query, user, context)
-    elif data == "list_conversations":
+    if data == "list_conversations":
         await show_conversations_list(query, user)
     elif data == "back_to_list":
         await show_conversations_list(query, user)
@@ -204,19 +202,6 @@ async def _tg_login_confirm(query, tg_user, token_str: str):
 
 
 # ───────────────────────── Conversations ─────────────────────────
-
-async def _new_conversation(query, user, context):
-    db_user = await get_or_create_user(
-        telegram_id=user.id, telegram_username=user.username,
-        first_name=user.first_name, last_name=user.last_name,
-    )
-    conversation = await ConversationManager.create_new_conversation(db_user.id)
-    context.user_data['active_conversation_id'] = conversation.id
-    await query.edit_message_text(
-        f"💬 Создан новый диалог #{conversation.id}!\n\nНапиши что-нибудь — после первого сообщения "
-        f"диалог получит имя автоматически.",
-        reply_markup=MainMenuKeyboard.get_quick_replies(),
-    )
 
 
 async def show_conversations_list(query, user):
@@ -407,8 +392,9 @@ async def _show_settings(query, user):
             f"🎯 Top P: <b>{s.top_p}</b>  <i>(разнообразие словаря)</i>\n"
             f"📊 Max Tokens: <b>{s.max_tokens}</b>  <i>(лимит длины ответа)</i>\n"
             f"🔔 Уведомления: <b>{notif}</b>\n\n"
-            "Меняй значения в веб-интерфейсе на <code>saiga.vaibkod.ru/settings</code>.\n"
-            "<i>(In-bot редактирование — следующий этап.)</i>"
+            "Жми кнопку чтобы изменить значение здесь, в боте. "
+            "Те же настройки доступны в веб-интерфейсе на "
+            "<code>saiga.vaibkod.ru/settings</code> — синхронизируется автоматически."
         )
 
     await query.edit_message_text(text, parse_mode="HTML", reply_markup=SettingsKeyboard.get_keyboard())

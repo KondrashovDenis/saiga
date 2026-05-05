@@ -181,9 +181,10 @@ async def rename_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ Переименован в: <b>{new_title}</b>", parse_mode='HTML')
 
 
+# /new обрабатывается через ConversationHandler в handlers/new_conversation.py
+# (спрашивает имя диалога перед созданием).
 command_handlers = [
     CommandHandler('help', help_command),
-    CommandHandler('new', new_command),
     CommandHandler('list', list_command),
     CommandHandler('settings', settings_command),
     CommandHandler('current', current_command),
