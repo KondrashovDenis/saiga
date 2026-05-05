@@ -157,7 +157,9 @@ def delete_user(user_id):
 
     # Подтверждение через POST-параметр (форма пошлёт confirm=username)
     confirm = request.form.get('confirm', '').strip()
-    expected = user.username or user.email or str(user.id)
+    # Для TG-only юзеров (нет username и email) явный префикс tg-{id} — чтобы
+    # админ понимал что вводит, а не просто число.
+    expected = user.username or user.email or f"tg-{user.id}"
     if confirm != expected:
         flash(f'Подтверждение не совпало. Жду точное "{expected}".', 'danger')
         return redirect(url_for('admin.users_list'))

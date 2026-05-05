@@ -198,9 +198,21 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Обычный /start без аргументов — старое поведение.
         db_user, created = await _ensure_user(session, tg_user)
+        needs_name = not (db_user.first_name or "").strip()
 
-    text = (WELCOME_NEW if created else WELCOME_BACK).format(name=tg_user.first_name)
+    display = (db_user.first_name or tg_user.first_name or "друг").strip() or "друг"
+    text = (WELCOME_NEW if created else WELCOME_BACK).format(name=display)
     await update.message.reply_text(text, reply_markup=MainMenuKeyboard.get_keyboard())
+
+    # Если first_name всё ещё пустой (приватный TG-профиль) — предложим заполнить.
+    # Не блокируем: онбординг через ConversationHandler по команде /name.
+    if needs_name:
+        await update.message.reply_text(
+            "Кстати — как мне к тебе обращаться? Отправь команду <code>/name</code> "
+            "и напиши имя одним сообщением. Это поможет нам понимать друг друга. "
+            "Или просто игнорируй, если не важно.",
+            parse_mode="HTML",
+        )
 
 
 start_handler = CommandHandler("start", start_command)

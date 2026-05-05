@@ -40,6 +40,7 @@ def setup_handlers_sync(application):
         settings_conversation_handler,
         toggle_notifications_handler,
     )
+    from handlers.name_setup import name_setup_handler
     from handlers.text_handler import text_handler
     from handlers.document_handler import document_handler
 
@@ -49,6 +50,7 @@ def setup_handlers_sync(application):
     # чтобы они перехватывали свои callback-паттерны раньше общего роутера.
     application.add_handler(settings_conversation_handler)
     application.add_handler(toggle_notifications_handler)
+    application.add_handler(name_setup_handler)
 
     application.add_handler(callback_handler)
     application.add_handler(document_handler)

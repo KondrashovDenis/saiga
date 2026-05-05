@@ -43,6 +43,42 @@
                 </div>
             </div>
 
+            {# ── Email-привязка (для TG-only юзеров) ── #}
+            <div class="settings-card">
+                <h2>Email</h2>
+                <div id="email-link-block" style="font-size:14px; color: var(--tx-muted);">
+                    {% if current_user.email %}
+                        <div>Email: <span style="color:var(--tx);">{{ current_user.email }}</span>
+                          {% if current_user.email_verified %}<span style="color:var(--ok); margin-left:6px;" title="подтверждён">✓</span>{% else %}<span style="color:var(--danger); margin-left:6px;" title="не подтверждён">⚠</span>{% endif %}
+                        </div>
+                        {% if not current_user.email_verified %}
+                        <a href="{{ url_for('auth.resend_verify') }}" style="font-size:12px; display:inline-block; margin-top:8px;">Прислать подтверждение ещё раз</a>
+                        {% endif %}
+                    {% else %}
+                        <div>Email не привязан. Привяжи, чтобы можно было войти и без Telegram.</div>
+                        <button type="button" id="email-link-btn" class="btn" style="margin-top: 10px; background:#229ED9; color:#fff;">
+                            Привязать email
+                        </button>
+                        <div id="email-link-form" style="display:none; margin-top:12px;">
+                            <div class="field">
+                                <label for="el-email">Email</label>
+                                <input type="email" id="el-email" required>
+                            </div>
+                            <div class="field">
+                                <label for="el-pwd">Пароль (мин 8)</label>
+                                <input type="password" id="el-pwd" required minlength="8">
+                            </div>
+                            <div class="field">
+                                <label for="el-pwd2">Повторите пароль</label>
+                                <input type="password" id="el-pwd2" required minlength="8">
+                            </div>
+                            <button type="button" id="el-submit" class="btn">Привязать</button>
+                            <div id="el-status" style="font-size:12px; color: var(--tx-faint); margin-top: 8px; min-height: 18px;"></div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
             {# ── Telegram-привязка (внутри grid'а, type=button — не сабмитит форму) ── #}
             <div class="settings-card">
                 <h2>Telegram</h2>

@@ -56,7 +56,7 @@
                         {% endif %}
                         <form method="POST" action="{{ url_for('admin.delete_user', user_id=u.id) }}"
                               style="display:inline; margin: 2px;"
-                              data-confirm-delete="{{ u.username or u.email or u.id }}">
+                              data-confirm-delete="{{ u.username or u.email or 'tg-' ~ u.id }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="confirm" value="">
                             <button type="submit" class="btn-mini btn-mini-danger" title="Удалить юзера + все его данные">🗑</button>

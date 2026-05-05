@@ -1,6 +1,6 @@
 from urllib.parse import urlparse
 
-from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
+from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField
@@ -98,6 +98,17 @@ class ResetPasswordForm(FlaskForm):
         EqualTo('password', message='Пароли должны совпадать')
     ])
     submit = SubmitField('Установить пароль')
+
+
+class LinkEmailForm(FlaskForm):
+    """Привязка email к существующему юзеру (например TG-only хочет добавить пароль)."""
+    email = StringField('Email', validators=[DataRequired(), Email(), Length(max=120)])
+    password = PasswordField('Пароль', validators=[DataRequired(), Length(min=8)])
+    password2 = PasswordField('Повторите пароль', validators=[
+        DataRequired(),
+        EqualTo('password', message='Пароли должны совпадать')
+    ])
+    submit = SubmitField('Привязать')
 
 
 def _send_verify_email_for_user(user: User) -> bool:
@@ -297,6 +308,64 @@ def reset_password(token):
         return redirect(url_for('auth.login'))
 
     return render_template('auth/reset_password.html', form=form, token=token)
+
+
+@auth_bp.route('/link-email', methods=['POST'])
+@login_required
+@limiter.limit("5 per hour")
+def link_email():
+    """Привязать email + пароль к текущему юзеру (TG-only хочет email-вход).
+
+    После привязки email_verified=False — юзеру отправляется verify-link,
+    auth_method переводится в 'both' (TG остаётся как опция входа).
+    """
+    if current_user.email and current_user.password_hash:
+        return jsonify({"error": "email_already_linked",
+                        "message": "Email уже привязан к этому аккаунту."}), 409
+
+    form = LinkEmailForm()
+    if not form.validate_on_submit():
+        # Возвращаем JSON с ошибками формы для AJAX
+        errors = {f: [str(e) for e in v] for f, v in form.errors.items()}
+        return jsonify({"error": "validation_failed", "errors": errors}), 400
+
+    # Email и username должны быть unique. username возьмём = email (юзер
+    # потом переименует если хочет).
+    email = form.email.data
+    if db.session.query(User).filter(
+            User.id != current_user.id, User.email == email).first():
+        return jsonify({"error": "email_taken",
+                        "message": "Этот email уже используется."}), 409
+
+    # Если username был None — генерим из email-prefix чтобы не нарушать unique.
+    if not current_user.username:
+        # email -> "user@host.tld" -> "user", потом проверка unique с числовым суффиксом
+        base = (email.split('@', 1)[0] or f'user{current_user.id}')[:50]
+        candidate = base
+        i = 1
+        while db.session.query(User).filter(
+                User.id != current_user.id, User.username == candidate).first():
+            i += 1
+            candidate = f"{base}{i}"
+        current_user.username = candidate
+
+    current_user.email = email
+    current_user.set_password(form.password.data)
+    current_user.email_verified = False
+    if current_user.auth_method == 'telegram':
+        current_user.auth_method = 'both'
+    db.session.commit()
+
+    # Шлём verify-email
+    sent = _send_verify_email_for_user(current_user)
+    return jsonify({
+        "ok": True,
+        "username": current_user.username,
+        "email": current_user.email,
+        "verify_email_sent": sent,
+        "message": "Email привязан. Подтверди ссылку из письма." if sent
+                   else "Email привязан, но письмо не отправлено (SMTP fail)."
+    })
 
 
 @auth_bp.route('/logout')
