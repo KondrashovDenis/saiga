@@ -63,10 +63,34 @@ def is_smtp_configured() -> bool:
                 and os.environ.get("SMTP_PASSWORD"))
 
 
+def _smtp_send(msg: EmailMessage) -> bool:
+    """Общий путь отправки EmailMessage через настроенный SMTP."""
+    smtp_host = os.environ["SMTP_HOST"]
+    smtp_port = int(os.environ.get("SMTP_PORT", "465"))
+    smtp_user = os.environ["SMTP_USER"]
+    smtp_password = os.environ["SMTP_PASSWORD"]
+    smtp_use_ssl = os.environ.get("SMTP_USE_SSL", "true").lower() in ("true", "1", "yes")
+    try:
+        ctx = ssl.create_default_context()
+        if smtp_use_ssl:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, context=ctx, timeout=15) as s:
+                s.login(smtp_user, smtp_password)
+                s.send_message(msg)
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as s:
+                s.starttls(context=ctx)
+                s.login(smtp_user, smtp_password)
+                s.send_message(msg)
+        return True
+    except Exception as e:
+        logger.error("SMTP send failed: %s", e, exc_info=True)
+        return False
+
+
 def send_verify_email(to_email: str, username: str, verify_url: str) -> bool:
     """Отправить письмо с verify-ссылкой. True если ушло, False иначе.
 
-    При SMTP_HOST=NONE логирует warning и возвращает True (для dev / локалки —
+    При SMTP_HOST=NONE логирует warning и возвращает False (для dev / локалки —
     юзер регистрируется без верификации). В production это место не
     срабатывает, потому что login-flow проверяет needs_email_verification.
     """
@@ -75,12 +99,7 @@ def send_verify_email(to_email: str, username: str, verify_url: str) -> bool:
                        "Verify URL would be: %s", to_email, verify_url)
         return False
 
-    smtp_host = os.environ["SMTP_HOST"]
-    smtp_port = int(os.environ.get("SMTP_PORT", "465"))
-    smtp_user = os.environ["SMTP_USER"]
-    smtp_password = os.environ["SMTP_PASSWORD"]
-    smtp_use_ssl = os.environ.get("SMTP_USE_SSL", "true").lower() in ("true", "1", "yes")
-    smtp_from = os.environ.get("SMTP_FROM", smtp_user)
+    smtp_from = os.environ.get("SMTP_FROM", os.environ["SMTP_USER"])
 
     msg = EmailMessage()
     msg["Subject"] = "Подтвердите регистрацию в Saiga AI"
@@ -123,19 +142,100 @@ def send_verify_email(to_email: str, username: str, verify_url: str) -> bool:
     msg.set_content(text_body)
     msg.add_alternative(html_body, subtype="html")
 
-    try:
-        ctx = ssl.create_default_context()
-        if smtp_use_ssl:
-            with smtplib.SMTP_SSL(smtp_host, smtp_port, context=ctx, timeout=15) as s:
-                s.login(smtp_user, smtp_password)
-                s.send_message(msg)
-        else:
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as s:
-                s.starttls(context=ctx)
-                s.login(smtp_user, smtp_password)
-                s.send_message(msg)
+    if _smtp_send(msg):
         logger.info("verify email sent to %s", to_email)
         return True
-    except Exception as e:
-        logger.error("SMTP send failed for %s: %s", to_email, e, exc_info=True)
+    logger.error("SMTP failed to send verify email to %s", to_email)
+    return False
+
+
+# ──────────────────────── Password reset ────────────────────────
+# Отдельный salt → reset-токен нельзя использовать как verify-токен и наоборот.
+# TTL короче (1 час) — reset более sensitive (даёт смену пароля).
+PASSWORD_RESET_TOKEN_TTL_SEC = 60 * 60
+PASSWORD_RESET_SALT = "password-reset-v1"
+
+
+def _reset_serializer() -> URLSafeTimedSerializer:
+    return URLSafeTimedSerializer(Config.SECRET_KEY, salt=PASSWORD_RESET_SALT)
+
+
+def make_password_reset_token(user_id: int, password_hash: str) -> str:
+    """Генерирует reset-токен, привязанный к текущему password_hash.
+
+    Привязка к password_hash означает: после успешной смены пароля старый
+    токен (даже если ещё не истёк) становится невалидным — потому что hash
+    изменился. Защита от replay: если кто-то перехватил reset-link и юзер
+    уже сменил пароль — атакующий не может им воспользоваться.
+    """
+    return _reset_serializer().dumps({"uid": user_id, "ph": password_hash or ""})
+
+
+def parse_password_reset_token(token: str) -> tuple[int | None, str | None]:
+    """Возвращает (user_id, password_hash_at_issue) если токен валиден, иначе (None, None)."""
+    try:
+        data = _reset_serializer().loads(token, max_age=PASSWORD_RESET_TOKEN_TTL_SEC)
+        return data.get("uid"), data.get("ph")
+    except SignatureExpired:
+        logger.info("password reset token expired")
+        return None, None
+    except BadSignature:
+        logger.warning("password reset token bad signature")
+        return None, None
+
+
+def send_password_reset_email(to_email: str, username: str, reset_url: str) -> bool:
+    """Отправить письмо с reset-ссылкой."""
+    if not is_smtp_configured():
+        logger.warning("SMTP not configured — skipping password reset email to %s. "
+                       "Reset URL would be: %s", to_email, reset_url)
         return False
+
+    smtp_from = os.environ.get("SMTP_FROM", os.environ["SMTP_USER"])
+
+    msg = EmailMessage()
+    msg["Subject"] = "Сброс пароля в Saiga AI"
+    msg["From"] = f"Saiga AI <{smtp_from}>"
+    msg["To"] = to_email
+
+    text_body = (
+        f"Привет, {username}!\n\n"
+        f"Кто-то запросил сброс пароля для твоего аккаунта в Saiga AI. "
+        f"Чтобы установить новый пароль, открой ссылку (действует 1 час):\n\n"
+        f"{reset_url}\n\n"
+        f"Если это не ты — просто проигнорируй это письмо, пароль не изменится.\n\n"
+        f"— Saiga AI · saiga.vaibkod.ru"
+    )
+
+    html_body = f"""
+    <html><body style="font-family: -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px;">
+      <h2 style="color: #229ED9;">Сброс пароля</h2>
+      <p>Привет, <b>{username}</b>!</p>
+      <p>Кто-то запросил сброс пароля для твоего аккаунта в Saiga AI. Чтобы установить новый, нажми на кнопку (ссылка действует 1 час):</p>
+      <p style="text-align: center; margin: 32px 0;">
+        <a href="{reset_url}"
+           style="background: #229ED9; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; display: inline-block;">
+           Сбросить пароль
+        </a>
+      </p>
+      <p style="color: #888; font-size: 13px;">
+        Или открой ссылку вручную:<br>
+        <span style="word-break: break-all;">{reset_url}</span>
+      </p>
+      <p style="color: #888; font-size: 13px;">
+        Если это не ты — просто проигнорируй это письмо, пароль не изменится.
+      </p>
+      <p style="color: #888; font-size: 12px; margin-top: 32px; border-top: 1px solid #eee; padding-top: 16px;">
+        — Saiga AI · <a href="https://saiga.vaibkod.ru">saiga.vaibkod.ru</a>
+      </p>
+    </body></html>
+    """
+
+    msg.set_content(text_body)
+    msg.add_alternative(html_body, subtype="html")
+
+    if _smtp_send(msg):
+        logger.info("password reset email sent to %s", to_email)
+        return True
+    logger.error("SMTP failed to send password reset email to %s", to_email)
+    return False

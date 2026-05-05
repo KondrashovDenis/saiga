@@ -14,6 +14,9 @@ from utils.email_service import (
     make_verify_token,
     parse_verify_token,
     send_verify_email,
+    make_password_reset_token,
+    parse_password_reset_token,
+    send_password_reset_email,
     is_smtp_configured,
 )
 
@@ -81,6 +84,20 @@ class LoginForm(FlaskForm):
 class ResendVerifyForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email(), Length(max=120)])
     submit = SubmitField('Отправить ещё раз')
+
+
+class ForgotPasswordForm(FlaskForm):
+    email = StringField('Email', validators=[DataRequired(), Email(), Length(max=120)])
+    submit = SubmitField('Отправить ссылку')
+
+
+class ResetPasswordForm(FlaskForm):
+    password = PasswordField('Новый пароль', validators=[DataRequired(), Length(min=8)])
+    password2 = PasswordField('Повторите пароль', validators=[
+        DataRequired(),
+        EqualTo('password', message='Пароли должны совпадать')
+    ])
+    submit = SubmitField('Установить пароль')
 
 
 def _send_verify_email_for_user(user: User) -> bool:
@@ -213,6 +230,73 @@ def resend_verify():
               'info')
         return redirect(url_for('auth.login'))
     return render_template('auth/resend_verify.html', form=form)
+
+
+def _send_password_reset_email_for_user(user: User) -> bool:
+    """Сгенерировать reset-токен и отправить ссылку юзеру.
+
+    Токен привязан к текущему password_hash — после смены пароля старая
+    ссылка автоматически становится невалидной (защита от replay).
+    """
+    token = make_password_reset_token(user.id, user.password_hash or "")
+    reset_url = url_for('auth.reset_password', token=token, _external=True)
+    return send_password_reset_email(user.email, user.username or user.email, reset_url)
+
+
+@auth_bp.route('/forgot-password', methods=['GET', 'POST'])
+@limiter.limit("3 per hour", methods=['POST'])
+def forgot_password():
+    """Запрос на сброс пароля. Защита от user enumeration —
+    всегда возвращаем generic ответ независимо от existence email."""
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+
+    form = ForgotPasswordForm()
+    if form.validate_on_submit():
+        user = db.session.query(User).filter_by(email=form.email.data).first()
+        # Шлём только если есть юзер с password-auth (TG-only юзерам пароль
+        # сбрасывать нечего — у них вход через Telegram).
+        if user and user.password_hash:
+            _send_password_reset_email_for_user(user)
+        # Generic-ответ независимо от existence — не палим accounts.
+        flash('Если этот email есть в системе — мы прислали ссылку для сброса пароля. '
+              'Ссылка живёт 1 час.', 'info')
+        return redirect(url_for('auth.login'))
+
+    return render_template('auth/forgot_password.html', form=form)
+
+
+@auth_bp.route('/reset/<token>', methods=['GET', 'POST'])
+@limiter.limit("10 per hour")
+def reset_password(token):
+    """Установка нового пароля по reset-token. Токен валиден 1 час и
+    привязан к текущему password_hash — после смены становится невалидным."""
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+
+    user_id, ph_at_issue = parse_password_reset_token(token)
+    if user_id is None:
+        flash('Ссылка для сброса недействительна или истекла.', 'danger')
+        return redirect(url_for('auth.forgot_password'))
+
+    user = db.session.query(User).get(user_id)
+    if user is None or (user.password_hash or "") != (ph_at_issue or ""):
+        # Хеш изменился — токен использован или пароль уже сменён через другую ссылку.
+        flash('Ссылка для сброса недействительна (возможно, пароль уже сменён).', 'danger')
+        return redirect(url_for('auth.forgot_password'))
+
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        user.set_password(form.password.data)
+        # Заодно подтверждаем email — раз юзер кликнул на ссылку из письма,
+        # значит email он контролирует.
+        if not user.email_verified:
+            user.email_verified = True
+        db.session.commit()
+        flash('Пароль обновлён. Теперь можно войти.', 'success')
+        return redirect(url_for('auth.login'))
+
+    return render_template('auth/reset_password.html', form=form, token=token)
 
 
 @auth_bp.route('/logout')

@@ -37,7 +37,11 @@
 
     <div class="auth-foot" style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;">
         <span>Нет аккаунта? <a href="{{ url_for('auth.register') }}">Зарегистрироваться</a></span>
-        <span><a href="{{ url_for('auth.resend_verify') }}">Не пришло письмо?</a></span>
+        <span>
+            <a href="{{ url_for('auth.forgot_password') }}">Забыл пароль?</a>
+            ·
+            <a href="{{ url_for('auth.resend_verify') }}">Не пришло письмо?</a>
+        </span>
     </div>
 </div>
 

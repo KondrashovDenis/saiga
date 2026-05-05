@@ -1,0 +1,94 @@
+{% extends 'layout.html' %}
+{% block title %}Юзеры — admin{% endblock %}
+{% block content %}
+<div class="settings-wrap" style="max-width: 1400px;">
+    <h1>Юзеры ({{ users|length }})</h1>
+
+    <div class="settings-card" style="overflow-x: auto; padding: 0;">
+        <table class="admin-table" style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--bd); text-align: left;">
+                    <th style="padding: 12px 8px;">id</th>
+                    <th style="padding: 12px 8px;">username</th>
+                    <th style="padding: 12px 8px;">email</th>
+                    <th style="padding: 12px 8px;" title="email_verified">v</th>
+                    <th style="padding: 12px 8px;" title="is_admin">a</th>
+                    <th style="padding: 12px 8px;">tg</th>
+                    <th style="padding: 12px 8px;">pwd</th>
+                    <th style="padding: 12px 8px;">created</th>
+                    <th style="padding: 12px 8px;">last_active</th>
+                    <th style="padding: 12px 8px; min-width: 240px;">actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for u in users %}
+                <tr style="border-bottom: 1px solid var(--bd);
+                           {% if u.id == current_user.id %}background: rgba(34,158,217,0.08);{% endif %}">
+                    <td style="padding: 8px;">{{ u.id }}</td>
+                    <td style="padding: 8px;">{{ u.username or '—' }}</td>
+                    <td style="padding: 8px; font-size: 12px;">{{ u.email or '—' }}</td>
+                    <td style="padding: 8px;">{% if u.email_verified %}✓{% else %}<span style="color:var(--danger)">✗</span>{% endif %}</td>
+                    <td style="padding: 8px;">{% if u.is_admin %}<b style="color:var(--ok)">A</b>{% else %}—{% endif %}</td>
+                    <td style="padding: 8px; font-size: 12px;">{% if u.telegram_username %}@{{ u.telegram_username }}{% elif u.telegram_id %}{{ u.telegram_id }}{% else %}—{% endif %}</td>
+                    <td style="padding: 8px;">{% if u.password_hash %}✓{% else %}—{% endif %}</td>
+                    <td style="padding: 8px; font-size: 11px; color: var(--tx-muted);">{{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '—' }}</td>
+                    <td style="padding: 8px; font-size: 11px; color: var(--tx-muted);">{{ u.last_activity.strftime('%Y-%m-%d %H:%M') if u.last_activity else '—' }}</td>
+                    <td style="padding: 8px;">
+                        <form method="POST" action="{{ url_for('admin.toggle_admin', user_id=u.id) }}" style="display:inline; margin: 2px;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn-mini" title="Toggle is_admin">±A</button>
+                        </form>
+                        <form method="POST" action="{{ url_for('admin.toggle_verified', user_id=u.id) }}" style="display:inline; margin: 2px;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn-mini" title="Toggle email_verified">±V</button>
+                        </form>
+                        {% if u.password_hash or u.email %}
+                        <form method="POST" action="{{ url_for('admin.reset_password_inline', user_id=u.id) }}" style="display:inline; margin: 2px;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn-mini" title="Сгенерить новый пароль и показать">🔑</button>
+                        </form>
+                        {% endif %}
+                        {% if u.email %}
+                        <form method="POST" action="{{ url_for('admin.send_reset_email', user_id=u.id) }}" style="display:inline; margin: 2px;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn-mini" title="Послать reset-link на email">✉</button>
+                        </form>
+                        {% endif %}
+                        <form method="POST" action="{{ url_for('admin.delete_user', user_id=u.id) }}"
+                              style="display:inline; margin: 2px;"
+                              data-confirm-delete="{{ u.username or u.email or u.id }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="confirm" value="">
+                            <button type="submit" class="btn-mini btn-mini-danger" title="Удалить юзера + все его данные">🗑</button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div style="margin-top: 16px; font-size: 12px; color: var(--tx-faint);">
+        <b>Колонки:</b> v = email_verified · a = is_admin · pwd = есть password_hash<br>
+        <b>Действия:</b> ±A toggle admin · ±V toggle verified · 🔑 inline reset (показывает новый пароль) ·
+        ✉ send email с reset-link · 🗑 удалить (нужно ввести точный username)
+    </div>
+</div>
+
+<style>
+.btn-mini {
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--bd-strong);
+  color: var(--tx);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.btn-mini:hover { background: var(--bg-hover); }
+.btn-mini-danger { color: var(--danger); }
+.btn-mini-danger:hover { background: rgba(185,74,74,0.15); }
+</style>
+
+<script src="{{ url_for('static', filename='js/admin-users.js') }}?v={{ asset_version }}"></script>
+{% endblock %}

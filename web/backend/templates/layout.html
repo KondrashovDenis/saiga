@@ -62,6 +62,11 @@
                 <a href="{{ url_for('settings.user_settings') }}">
                     <span>⚙</span> <span>Настройки</span>
                 </a>
+                {% if current_user.is_admin %}
+                <a href="{{ url_for('admin.users_list') }}">
+                    <span>🛡</span> <span>Админка</span>
+                </a>
+                {% endif %}
                 <hr>
                 <a href="{{ url_for('auth.logout') }}">
                     <span>↪</span> <span>Выйти</span>
