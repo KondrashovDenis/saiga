@@ -146,6 +146,13 @@ def login():
             flash('Неверное имя пользователя или пароль', 'danger')
             return redirect(url_for('auth.login'))
 
+        # Argon2 rehash on login: старые юзеры с PBKDF2-хешами молча
+        # перехешируются в Argon2 при первом успешном логине. Когда все
+        # активные юзеры зальются — старые хеши вымоются естественным образом.
+        if user.needs_password_rehash:
+            user.set_password(form.password.data)
+            db.session.commit()
+
         # Email верификация для password-юзеров. TG-only юзеры не блокируются.
         if user.needs_email_verification:
             flash('Сначала подтверди email — мы прислали ссылку при регистрации. '

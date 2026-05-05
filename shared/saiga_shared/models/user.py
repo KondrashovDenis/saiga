@@ -79,17 +79,30 @@ class User(Base):
         return str(self.id)
 
     # ───────────── Password helpers (web only — werkzeug lazy) ─────────────
+    # scrypt — memory-hard hash, устойчивый к GPU/ASIC-атакам. В stdlib (Python
+    # hashlib.scrypt), без extra deps. Werkzeug 3.x делает scrypt дефолтом и
+    # убирает argon2 (broken в 2.3.7, deprecated в 3.0). Старые PBKDF2-хеши
+    # читаются через check_password_hash (werkzeug парсит prefix), при первом
+    # успешном логине web rehash-ит их в scrypt —
+    # см. routes/auth.py login + needs_password_rehash.
+    PASSWORD_HASH_METHOD = "scrypt"
+
     def set_password(self, password: str) -> None:
         if not password:
             return
         from werkzeug.security import generate_password_hash
-        self.password_hash = generate_password_hash(password)
+        self.password_hash = generate_password_hash(password, method=self.PASSWORD_HASH_METHOD)
 
     def check_password(self, password: str) -> bool:
         if not self.password_hash:
             return False
         from werkzeug.security import check_password_hash
         return check_password_hash(self.password_hash, password)
+
+    @property
+    def needs_password_rehash(self) -> bool:
+        """True если хеш не scrypt — нужно перехешировать после успешного логина."""
+        return bool(self.password_hash) and not self.password_hash.startswith("scrypt")
 
     @property
     def needs_email_verification(self) -> bool:
