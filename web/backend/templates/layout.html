@@ -17,7 +17,7 @@
         {% for category, message in messages %}
             <div class="flash {{ category }}">
                 <span>{{ message }}</span>
-                <button class="flash-close" onclick="this.parentElement.remove()">×</button>
+                <button class="flash-close" type="button">×</button>
             </div>
         {% endfor %}
     {% endwith %}
@@ -88,29 +88,7 @@
     </section>
 </div>
 
-<script>
-// User menu (бургер аккаунта)
-(function(){
-  var t = document.getElementById('userMenuToggle');
-  var m = document.getElementById('userMenu');
-  if (t && m) {
-    t.addEventListener('click', function(e){
-      e.stopPropagation();
-      m.classList.toggle('open');
-    });
-    document.addEventListener('click', function(){ m.classList.remove('open'); });
-    m.addEventListener('click', function(e){ e.stopPropagation(); });
-  }
-})();
-// Mobile sidebar toggle
-(function(){
-  var t = document.getElementById('menuToggle');
-  var s = document.getElementById('sidebar');
-  if (t && s) {
-    t.addEventListener('click', function(){ s.classList.toggle('open'); });
-  }
-})();
-</script>
+<script src="{{ url_for('static', filename='js/layout.js') }}?v={{ asset_version }}"></script>
 {% endif %}
 
 {% block scripts %}{% endblock %}

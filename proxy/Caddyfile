@@ -75,9 +75,10 @@ saiga.vaibkod.ru {
     encode gzip zstd
     import security_base
     header {
-        # Inline <script> блоки в layout.html / login.html / settings.html
-        # требуют 'unsafe-inline'. Когда вынесем во внешний .js — удалить.
-        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        # Inline <script> вынесены во внешние .js (см. static/js/),
+        # 'unsafe-inline' для script-src снят. style-src оставлен с
+        # 'unsafe-inline' — много inline style="..." в шаблонах, отдельная задача.
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     }
     reverse_proxy saiga-web-app:5000 {
         transport http {

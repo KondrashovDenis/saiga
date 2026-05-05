@@ -8,41 +8,12 @@
     <div class="main-actions">
         <button class="icon-btn" id="renameBtn" title="Переименовать">✎</button>
         <button class="icon-btn" id="shareBtn" title="Поделиться">↗</button>
-        <button class="icon-btn danger" onclick="document.getElementById('deleteModal').classList.add('open')" title="Удалить">×</button>
+        <button class="icon-btn danger" type="button" data-modal-open="deleteModal" title="Удалить">×</button>
     </div>
     {% endif %}
 </div>
 
-{% if is_owner %}
-<script>
-(function() {
-    const btn = document.getElementById('renameBtn');
-    const titleEl = document.getElementById('convTitle');
-    if (!btn || !titleEl) return;
-    const csrf = document.querySelector('meta[name=csrf-token]').content;
-    btn.addEventListener('click', async () => {
-        const current = titleEl.textContent.trim();
-        const next = prompt('Новое название диалога:', current);
-        if (!next || next.trim() === '' || next.trim() === current) return;
-        const id = titleEl.dataset.conversationId;
-        try {
-            const r = await fetch(`/conversations/${id}/rename`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
-                body: JSON.stringify({ title: next.trim() }),
-            });
-            if (!r.ok) { alert('Ошибка: ' + r.status); return; }
-            const d = await r.json();
-            titleEl.textContent = d.title;
-            document.title = d.title;
-            // sidebar тоже обновим если есть
-            const sb = document.querySelector(`.sb-conv[href$="/conversations/${id}"] .sb-conv-title`);
-            if (sb) sb.textContent = d.title;
-        } catch (e) { alert('Сетевая ошибка: ' + e.message); }
-    });
-})();
-</script>
-{% endif %}
+
 
 <div class="chat">
     <div class="chat-stream" id="chatStream">
@@ -101,7 +72,7 @@
         <h2>Удалить диалог?</h2>
         <p>Действие нельзя отменить.</p>
         <div class="modal-actions">
-            <button type="button" class="btn btn-secondary" onclick="document.getElementById('deleteModal').classList.remove('open')">Отмена</button>
+            <button type="button" class="btn btn-secondary" data-modal-close="deleteModal">Отмена</button>
             <form action="{{ url_for('conversations.delete', conversation_id=conversation.id) }}" method="POST">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-danger">Удалить</button>
@@ -118,7 +89,7 @@
             <input type="text" id="shareLink" readonly>
         </div>
         <div class="modal-actions">
-            <button type="button" class="btn btn-secondary" onclick="document.getElementById('shareModal').classList.remove('open')">Закрыть</button>
+            <button type="button" class="btn btn-secondary" data-modal-close="shareModal">Закрыть</button>
             <button type="button" class="btn" id="copyBtn">Скопировать</button>
         </div>
     </div>
@@ -128,5 +99,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chat.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='js/conversation.js') }}?v={{ asset_version }}"></script>
 {% endblock %}
