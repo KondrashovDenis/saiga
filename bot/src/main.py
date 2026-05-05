@@ -42,6 +42,7 @@ def setup_handlers_sync(application):
     )
     from handlers.name_setup import name_setup_handler
     from handlers.new_conversation import new_conversation_handler
+    from handlers.web_login import web_command_handler, web_callback_handler
     from handlers.text_handler import text_handler
     from handlers.document_handler import document_handler
 
@@ -53,6 +54,8 @@ def setup_handlers_sync(application):
     application.add_handler(toggle_notifications_handler)
     application.add_handler(name_setup_handler)
     application.add_handler(new_conversation_handler)
+    application.add_handler(web_command_handler)
+    application.add_handler(web_callback_handler)
 
     application.add_handler(callback_handler)
     application.add_handler(document_handler)

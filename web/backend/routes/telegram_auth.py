@@ -145,3 +145,52 @@ def login_status():
         "display_name": user.display_name,
         "redirect": "/",
     })
+
+
+# ───────────────────────── AUTO-LOGIN из бота (deep-link «Открыть в Web») ────
+
+@telegram_auth_bp.route("/auto/<token>", methods=["GET"])
+def auto_login(token):
+    """Deep-link auto-login. Юзер жмёт в боте «🌐 Открыть в Web», бот
+    создаёт токен kind='auto' с user_id=db_user.id (известен сразу,
+    т.к. юзер уже идентифицирован Telegram-ом) и выдаёт URL
+    https://saiga.vaibkod.ru/api/telegram/auto/<token>.
+
+    Здесь: проверяем токен → login_user → redirect на /.
+
+    SECURITY: токен в URL = bearer. Любой кто перехватит ссылку → залогинен.
+    Защита:
+      - TTL короткий (бот делает 5 мин)
+      - Single-use (used_at)
+      - Только HTTPS (Caddy форсит)
+      - Логи в Sentry для аудита
+    """
+    from datetime import datetime
+    from flask import redirect, current_app
+
+    tok = db.session.query(TelegramLinkToken).filter_by(
+        token=token, kind="auto").first()
+    if tok is None:
+        current_app.logger.warning("auto-login: token not found")
+        return jsonify({"error": "token_not_found"}), 404
+    if tok.is_expired:
+        current_app.logger.info("auto-login: token expired (user_id=%s)", tok.user_id)
+        return jsonify({"error": "expired"}), 410
+    if tok.is_used:
+        current_app.logger.warning("auto-login: token already used (user_id=%s)", tok.user_id)
+        return jsonify({"error": "already_used"}), 410
+    if tok.user_id is None:
+        return jsonify({"error": "no_user_bound"}), 400
+
+    user = User.query.get(tok.user_id) if hasattr(User, 'query') else \
+           db.session.query(User).get(tok.user_id)
+    if user is None:
+        return jsonify({"error": "user_not_found"}), 500
+
+    tok.used_at = datetime.utcnow()
+    db.session.commit()
+
+    login_user(user, remember=True)
+    session.permanent = True
+    current_app.logger.info("auto-login OK: user_id=%s (%s)", user.id, user.display_name)
+    return redirect("/")

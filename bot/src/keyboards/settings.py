@@ -14,6 +14,9 @@ class SettingsKeyboard:
                 InlineKeyboardButton("🔔 Уведомления", callback_data="toggle_notifications")
             ],
             [
+                InlineKeyboardButton("🌐 Открыть в Web", callback_data="web_login_request"),
+            ],
+            [
                 InlineKeyboardButton("🔙 Назад", callback_data="main_menu")
             ]
         ]

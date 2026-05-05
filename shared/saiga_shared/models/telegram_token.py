@@ -32,7 +32,7 @@ class TelegramLinkToken(Base):
 
     id = Column(Integer, primary_key=True)
     token = Column(String(64), unique=True, nullable=False, index=True)
-    kind = Column(String(10), nullable=False)  # 'link' | 'login'
+    kind = Column(String(10), nullable=False)  # 'link' | 'login' | 'auto'
 
     # Для 'link' — известен сразу. Для 'login' — заполняется ботом.
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
@@ -45,7 +45,15 @@ class TelegramLinkToken(Base):
 
     @staticmethod
     def generate(kind: str, user_id: int | None, ttl_minutes: int = 10) -> "TelegramLinkToken":
-        if kind not in ("link", "login"):
+        """Создать одноразовый токен.
+
+        kind:
+          'link'  — привязка TG к существующему web-юзеру (user_id обязателен)
+          'login' — первичный вход в web через TG (user_id заполняется ботом)
+          'auto'  — auto-login из бота в web по deep-link (user_id обязателен,
+                    TTL рекомендуется короче — 5 мин, токен в URL = bearer)
+        """
+        if kind not in ("link", "login", "auto"):
             raise ValueError(f"Unknown kind: {kind}")
         return TelegramLinkToken(
             token=secrets.token_urlsafe(24),
