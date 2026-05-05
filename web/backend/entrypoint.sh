@@ -5,7 +5,10 @@ set -e
 
 echo "==> Running alembic upgrade head..."
 cd /app/shared
-alembic upgrade head
+# Alembic запускается под saiga_migrator (DDL права). Если MIGRATION_DATABASE_URL
+# не задан — fallback на DATABASE_URL (back-compat для деплоев до миграции
+# прав, не должен использоваться в проде после неё).
+DATABASE_URL="${MIGRATION_DATABASE_URL:-$DATABASE_URL}" alembic upgrade head
 cd /app
 
 echo "==> Starting gunicorn..."
