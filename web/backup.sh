@@ -7,8 +7,8 @@
 
 set -euo pipefail
 
-BACKUP_DIR="/home/denciao/projects/saiga/backups"
-KEEP=7
+BACKUP_DIR="/mnt/raid_hdd/denciao/backups/saiga"
+KEEP=30
 DATE="$(date +%F_%H-%M-%S)"
 
 mkdir -p "$BACKUP_DIR"
