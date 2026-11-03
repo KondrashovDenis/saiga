@@ -1,0 +1,35 @@
+
+# ──────────────── COMFYUI (SDXL Turbo + ControlNet, кристаллы healspirit) ────────────────
+# Клиент healspirit (glow_crystals/imagegen_client.py) не шлёт Authorization, поэтому пускаем по IP debianOCR;
+# Bearer оставлен для ручных вызовов (тот же ключ, что у imagegen).
+comfy.vaibkod.ru {
+    encode gzip zstd
+    import security_base
+
+    @from_debianocr remote_ip 84.54.188.199
+    @bearer header Authorization "Bearer {$IMAGEGEN_API_KEY}"
+
+    handle @from_debianocr {
+        reverse_proxy saiga-comfyui:8188 {
+            transport http {
+                read_timeout 300s
+                write_timeout 300s
+            }
+        }
+    }
+
+    handle @bearer {
+        reverse_proxy saiga-comfyui:8188 {
+            transport http {
+                read_timeout 300s
+                write_timeout 300s
+            }
+        }
+    }
+
+    handle {
+        respond "Unauthorized" 401 {
+            close
+        }
+    }
+}

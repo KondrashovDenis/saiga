@@ -1,0 +1,6 @@
+models/
+input/
+output/
+user/
+*.log
+docker-compose.yml.baseline

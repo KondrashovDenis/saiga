@@ -1,0 +1,37 @@
+services:
+  saiga-comfyui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: saiga-comfyui:latest
+    pull_policy: never
+    container_name: saiga-comfyui
+    restart: unless-stopped
+    runtime: nvidia
+    environment:
+      # четвёртая P104-100, PCIEX16(G4)_1 x4 (после экспериментов 2026-11-03: x1 = 280 с, x4 = 102 с на кристалл; LLM получил x4 + x1)
+      - NVIDIA_VISIBLE_DEVICES=GPU-fa0a96a7-0bf7-96fa-2826-4553b6b62e73
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # тот же фикс что в saiga-llm/imagegen: stub libcuda из CUDA toolkit перебивает driver
+      - LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/nvidia/current:/usr/local/cuda-11.8/lib64:/usr/local/cuda-11.8/targets/x86_64-linux/lib
+    volumes:
+      - ./models:/app/models   # sd_xl_turbo_1.0_fp16 + xinsir-canny-sdxl-1.0 (копии с debianOCR)
+      - ./input:/app/input
+      - ./output:/app/output
+      - ./user:/app/user
+    networks:
+      - default
+    expose:
+      - "8188"
+    shm_size: '4gb'
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8188/system_stats', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 300s
+
+networks:
+  default:
+    name: nginx-proxy
+    external: true

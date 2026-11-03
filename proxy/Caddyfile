@@ -27,49 +27,6 @@
     }
 }
 
-# ──────────────── LANDING (Wagtail CMS) ────────────────
-# /admin/* и /django-admin/* за basic_auth (второй слой поверх Wagtail login).
-# Пароль для basic_auth: ~/projects/vaibkod-landing/cms/docker/supss/admin-basic-auth.txt
-vaibkod.ru, www.vaibkod.ru {
-    encode gzip zstd
-    import security_base
-    header {
-        # Wagtail admin требует unsafe-inline для inline JS/CSS из кода.
-        # Внешний сайт тоже имеет inline стили (inline style="..." в шаблонах).
-        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src 'self' fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
-    }
-    request_body {
-        max_size 5MB
-    }
-
-    @admin path /admin* /django-admin*
-    handle @admin {
-        basic_auth {
-            denciao $2a$14$geOtkdVDz2yaznvlcWUwBObNZugi9.EltRS.vXbbu6HSx6iPMLc0O
-        }
-        reverse_proxy vaibkod-cms:8000 {
-            transport http {
-                read_timeout 60s
-                write_timeout 60s
-            }
-        }
-    }
-
-    handle {
-        reverse_proxy vaibkod-cms:8000 {
-            transport http {
-                read_timeout 60s
-                write_timeout 60s
-            }
-        }
-    }
-
-    log {
-        output stdout
-        format console
-    }
-}
-
 # ──────────────── WEB-APP ────────────────
 saiga.vaibkod.ru {
     encode gzip zstd
@@ -219,12 +176,40 @@ imagegen.vaibkod.ru {
     encode gzip zstd
     import security_base
 
-    @authorized header Authorization "Bearer {$IMAGEGEN_API_KEY}"
+    # 2026-11-03: один хост, два бэкенда. ComfyUI-пути (/prompt, /history, /view, /upload, /system_stats, /free, /queue, /object_info)
+    # → saiga-comfyui (SDXL Turbo + ControlNet, кристаллы healspirit; клиент не шлёт Bearer → пропуск по IP debianOCR).
+    # Остальное (/generate, /generate-controlnet, /healthz) → saiga-imagegen (SD1.5 FastAPI) по Bearer.
+    @bearer header Authorization "Bearer {$IMAGEGEN_API_KEY}"
+    @comfy_ip {
+        remote_ip 84.54.188.199
+        path /prompt* /history* /view* /upload/* /system_stats /free /queue* /object_info* /interrupt
+    }
+    @comfy_bearer {
+        header Authorization "Bearer {$IMAGEGEN_API_KEY}"
+        path /prompt* /history* /view* /upload/* /system_stats /free /queue* /object_info* /interrupt
+    }
 
-    handle @authorized {
+    handle @comfy_ip {
+        reverse_proxy saiga-comfyui:8188 {
+            transport http {
+                read_timeout 300s
+                write_timeout 300s
+            }
+        }
+    }
+
+    handle @comfy_bearer {
+        reverse_proxy saiga-comfyui:8188 {
+            transport http {
+                read_timeout 300s
+                write_timeout 300s
+            }
+        }
+    }
+
+    handle @bearer {
         reverse_proxy saiga-imagegen:8000 {
             transport http {
-                # ControlNet генерация может занять до 60 сек
                 read_timeout 180s
                 write_timeout 180s
             }
@@ -236,4 +221,11 @@ imagegen.vaibkod.ru {
             close
         }
     }
+}
+
+# ──────────────── VAULTWARDEN (Bitwarden-compatible password manager) ────────────────
+vault.vaibkod.ru {
+    encode gzip zstd
+    import security_base
+    reverse_proxy vaultwarden:80
 }

@@ -10,7 +10,7 @@ services:
     runtime: nvidia
     environment:
       # GPU 2 — освобождена в 5.1 от Saiga LLM
-      - NVIDIA_VISIBLE_DEVICES=2
+      - NVIDIA_VISIBLE_DEVICES=GPU-47984de7-4168-0c8c-efa8-0f93372f4246
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       # тот же фикс что в saiga-llm: stub libcuda из CUDA toolkit перебивает driver
       - LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/nvidia/current:/usr/local/cuda-11.8/lib64:/usr/local/cuda-11.8/targets/x86_64-linux/lib

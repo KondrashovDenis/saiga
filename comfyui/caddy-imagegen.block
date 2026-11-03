@@ -1,0 +1,50 @@
+imagegen.vaibkod.ru {
+    encode gzip zstd
+    import security_base
+
+    # 2026-11-03: один хост, два бэкенда. ComfyUI-пути (/prompt, /history, /view, /upload, /system_stats, /free, /queue, /object_info)
+    # → saiga-comfyui (SDXL Turbo + ControlNet, кристаллы healspirit; клиент не шлёт Bearer → пропуск по IP debianOCR).
+    # Остальное (/generate, /generate-controlnet, /healthz) → saiga-imagegen (SD1.5 FastAPI) по Bearer.
+    @bearer header Authorization "Bearer {$IMAGEGEN_API_KEY}"
+    @comfy_ip {
+        remote_ip 84.54.188.199
+        path /prompt* /history* /view* /upload/* /system_stats /free /queue* /object_info* /interrupt
+    }
+    @comfy_bearer {
+        header Authorization "Bearer {$IMAGEGEN_API_KEY}"
+        path /prompt* /history* /view* /upload/* /system_stats /free /queue* /object_info* /interrupt
+    }
+
+    handle @comfy_ip {
+        reverse_proxy saiga-comfyui:8188 {
+            transport http {
+                read_timeout 300s
+                write_timeout 300s
+            }
+        }
+    }
+
+    handle @comfy_bearer {
+        reverse_proxy saiga-comfyui:8188 {
+            transport http {
+                read_timeout 300s
+                write_timeout 300s
+            }
+        }
+    }
+
+    handle @bearer {
+        reverse_proxy saiga-imagegen:8000 {
+            transport http {
+                read_timeout 180s
+                write_timeout 180s
+            }
+        }
+    }
+
+    handle {
+        respond "Unauthorized" 401 {
+            close
+        }
+    }
+}

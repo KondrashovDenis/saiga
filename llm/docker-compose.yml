@@ -15,7 +15,7 @@ services:
     restart: unless-stopped
     runtime: nvidia
     environment:
-      - NVIDIA_VISIBLE_DEVICES=0,1
+      - NVIDIA_VISIBLE_DEVICES=GPU-338bbf4e-a3cf-6a5d-750f-7a7068138c08,GPU-973a0619-a4c1-08d6-04bd-c68217cdf052
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       # FIX 2026-04-30: stub libcuda из CUDA 11.8 toolkit перебивает реальный
       # driver хоста (535). LD_LIBRARY_PATH с приоритетом nvidia/current → driver
