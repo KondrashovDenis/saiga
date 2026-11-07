@@ -7,10 +7,17 @@ services:
     pull_policy: never
     container_name: saiga-comfyui
     restart: unless-stopped
+    # --normalvram вместо --lowvram из Dockerfile: с ControlNet/VAE/CLIP на второй карте SDXL UNet (4.9 ГБ) влезает целиком.
+    # SD1.5 (../imagegen) остановлен — его карта теперь здесь как cuda:1.
+    command: ["python", "main.py", "--listen", "0.0.0.0", "--port", "8188", "--disable-auto-launch", "--normalvram"]
     runtime: nvidia
     environment:
       # четвёртая P104-100, PCIEX16(G4)_1 x4 (после экспериментов 2026-11-03: x1 = 280 с, x4 = 102 с на кристалл; LLM получил x4 + x1)
-      - NVIDIA_VISIBLE_DEVICES=GPU-fa0a96a7-0bf7-96fa-2826-4553b6b62e73
+      # + третья P104 (x1, бывшая SD1.5) под ControlNet/VAE/CLIP через custom_nodes/saiga_device.py (2026-11-07)
+      - NVIDIA_VISIBLE_DEVICES=GPU-fa0a96a7-0bf7-96fa-2826-4553b6b62e73,GPU-47984de7-4168-0c8c-efa8-0f93372f4246
+      # по шине x1-карта (06:00) идёт раньше x4 (08:00) — переставляем, чтобы cuda:0 (UNet) была x4
+      - CUDA_DEVICE_ORDER=PCI_BUS_ID
+      - CUDA_VISIBLE_DEVICES=1,0
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       # тот же фикс что в saiga-llm/imagegen: stub libcuda из CUDA toolkit перебивает driver
       - LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/nvidia/current:/usr/local/cuda-11.8/lib64:/usr/local/cuda-11.8/targets/x86_64-linux/lib
@@ -19,6 +26,7 @@ services:
       - ./input:/app/input
       - ./output:/app/output
       - ./user:/app/user
+      - ./custom_nodes/saiga_device.py:/app/custom_nodes/saiga_device.py:ro
     networks:
       - default
     expose:
