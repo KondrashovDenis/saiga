@@ -1,0 +1,62 @@
+services:
+  saiga:
+    # Имя образа сохранено — текущий running container продолжит жить, пока
+    # не сделают явный rebuild:
+    #   cd ~/projects/saiga/llm
+    #   docker compose build
+    #   docker compose up -d --force-recreate
+    # Build context = llm/, чтобы submodule text-generation-webui/ попал в образ.
+    image: llm-docker-saiga:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    pull_policy: never
+    container_name: saiga-llm
+    restart: unless-stopped
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=GPU-338bbf4e-a3cf-6a5d-750f-7a7068138c08,GPU-973a0619-a4c1-08d6-04bd-c68217cdf052
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # FIX 2026-04-30: stub libcuda из CUDA 11.8 toolkit перебивает реальный
+      # driver хоста (535). LD_LIBRARY_PATH с приоритетом nvidia/current → driver
+      # 535.261 подцепляется, CUDA инициализируется, GPU задействуется (было 0%).
+      - LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/nvidia/current:/usr/local/cuda-11.8/lib64:/usr/local/cuda-11.8/targets/x86_64-linux/lib
+    volumes:
+      - ./models:/app/models
+    networks:
+      - default
+    shm_size: '64gb'
+    # ports НЕ публикуются на хост — Caddy ходит к saiga-llm:5000 и :7860
+    # через docker network nginx-proxy. Публикация на 0.0.0.0 обходила бы
+    # Caddy auth для всех в LAN (Docker bypass UFW). Внутри сети контейнеры
+    # друг друга видят по имени без публикации.
+    expose:
+      - "5000"
+      - "7860"
+    # Stub-симлинк на libcuda.so убран из Dockerfile — entrypoint-костыль больше
+    # не нужен. Запуск идёт через стандартный nvidia_entrypoint.sh из base-образа,
+    # CMD задаётся ниже.
+    command:
+      - python
+      - server.py
+      - --model-dir
+      - ./models/saiga
+      - --model
+      - saiga_nemo_12b.Q4_K_M.gguf
+      - --listen
+      - --api
+      - --flash-attn
+      - --threads
+      - "10"
+      - --threads-batch
+      - "14"
+      - --cfg-cache
+      - --mlock
+      - --no-mmap
+      - --n-gpu-layers
+      - "999"
+
+networks:
+  default:
+    name: nginx-proxy
+    external: true

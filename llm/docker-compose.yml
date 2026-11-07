@@ -1,11 +1,9 @@
 services:
   saiga:
-    # Имя образа сохранено — текущий running container продолжит жить, пока
-    # не сделают явный rebuild:
-    #   cd ~/projects/saiga/llm
-    #   docker compose build
-    #   docker compose up -d --force-recreate
-    # Build context = llm/, чтобы submodule text-generation-webui/ попал в образ.
+    # 2026-11-07: ooba заменён на голый llama-server (тот же бинарник, что ooba запускал внутри,
+    # llama_cpp_binaries 0.8.0+cu124, build 190bed0, работает на P104/driver 535).
+    # Причина: ooba обслуживал один запрос за раз; здесь 4 параллельных слота с continuous batching.
+    # Откат на ooba: docker compose -f docker-compose.ooba.yml up -d --force-recreate
     image: llm-docker-saiga:latest
     build:
       context: .
@@ -17,44 +15,68 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=GPU-338bbf4e-a3cf-6a5d-750f-7a7068138c08,GPU-973a0619-a4c1-08d6-04bd-c68217cdf052
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-      # FIX 2026-04-30: stub libcuda из CUDA 11.8 toolkit перебивает реальный
-      # driver хоста (535). LD_LIBRARY_PATH с приоритетом nvidia/current → driver
-      # 535.261 подцепляется, CUDA инициализируется, GPU задействуется (было 0%).
+      # stub libcuda из CUDA 11.8 toolkit перебивает драйвер хоста — драйверный путь первым (фикс 2026-04-30)
       - LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/nvidia/current:/usr/local/cuda-11.8/lib64:/usr/local/cuda-11.8/targets/x86_64-linux/lib
     volumes:
       - ./models:/app/models
     networks:
       - default
-    shm_size: '64gb'
-    # ports НЕ публикуются на хост — Caddy ходит к saiga-llm:5000 и :7860
-    # через docker network nginx-proxy. Публикация на 0.0.0.0 обходила бы
-    # Caddy auth для всех в LAN (Docker bypass UFW). Внутри сети контейнеры
-    # друг друга видят по имени без публикации.
+    shm_size: '8gb'
+    ulimits:
+      memlock: -1
+    # порты не публикуются: Caddy ходит к saiga-llm:5000 через сеть nginx-proxy (llm.vaibkod.ru — Bearer,
+    # saigaui.vaibkod.ru — basic_auth на встроенный веб-UI llama-server)
     expose:
       - "5000"
-      - "7860"
-    # Stub-симлинк на libcuda.so убран из Dockerfile — entrypoint-костыль больше
-    # не нужен. Запуск идёт через стандартный nvidia_entrypoint.sh из base-образа,
-    # CMD задаётся ниже.
+    entrypoint: ["/app/venv/lib/python3.11/site-packages/llama_cpp_binaries/bin/llama-server"]
     command:
-      - python
-      - server.py
-      - --model-dir
-      - ./models/saiga
       - --model
-      - saiga_nemo_12b.Q4_K_M.gguf
-      - --listen
-      - --api
+      - /app/models/saiga/saiga_nemo_12b.Q4_K_M.gguf
+      - --alias
+      - saiga
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+      # 4 слота × 8192 токенов (как был единственный слот у ooba)
+      - --ctx-size
+      - "32768"
+      - --parallel
+      - "4"
+      - --cont-batching
+      - --n-gpu-layers
+      - "999"
+      - --split-mode
+      - layer
       - --flash-attn
       - --threads
       - "10"
       - --threads-batch
       - "14"
-      - --cfg-cache
-      - --mlock
       - --no-mmap
-      - --n-gpu-layers
-      - "999"
+      - --mlock
+      - --rope-freq-base
+      - "1000000"
+      # шаблон чата из метаданных GGUF — как у ooba («Custom (obtained from model metadata)»)
+      - --jinja
+      # семплинг как у ooba API: клиент шлёт temperature/top_p, остальные фильтры выключены
+      - --temp
+      - "1.0"
+      - --top-p
+      - "1.0"
+      - --top-k
+      - "0"
+      - --min-p
+      - "0"
+      - --repeat-penalty
+      - "1.0"
+      - --metrics
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 180s
 
 networks:
   default:

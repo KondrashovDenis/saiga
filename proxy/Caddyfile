@@ -78,7 +78,7 @@ saigaui.vaibkod.ru {
         denciao $2a$14$rdiH8msX3HizdEeaIT6/Lux38mc0dAB2tDmM5xQIngE2EaSXbNsEm
     }
 
-    reverse_proxy saiga-llm:7860 {
+    reverse_proxy saiga-llm:5000 {
         transport http {
             read_timeout 600s
             write_timeout 600s
