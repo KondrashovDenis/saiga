@@ -26,7 +26,7 @@ GPUS = {
     AUX_GPU: "comfyui aux x1-райзер",
 }
 CONTAINERS = (
-    "caddy", "saiga-llm", "saiga-comfyui", "saiga-embedding", "saiga-postgres",
+    "caddy", "saiga-llm-1", "saiga-llm-2", "saiga-comfyui", "saiga-embedding", "saiga-postgres",
     "saiga-web-app", "saiga-web-redis", "vaultwarden",
     "artk_backend", "artk_frontend", "artk_postgres", "artk_redis",
     "grafana", "node-exporter", "cadvisor", "dcgm-exporter",

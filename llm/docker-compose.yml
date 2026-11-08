@@ -1,82 +1,95 @@
+# 2026-11-08: saiga_yandexgpt_8b — по одному llama-server на каждую LLM-карту (A/B у Дениса и Саши выиграла у Nemo).
+# Одна карта на экземпляр: 21.7 ток/с на разбор Кота (Nemo на двух картах split — 12.5), 8 одновременных ~1 мин.
+# Балансировка: Caddy (proxy/Caddyfile, сниппет saiga_llm) — least_conn + /health; у caddy в сети nginx-proxy
+# alias saiga-llm, так что клиенты (веб-чат, llm.vaibkod.ru) по-прежнему ходят на saiga-llm:5000.
+# Откат на Nemo: docker-compose.nemo.yml (см. комментарий в нём).
+x-llm: &llm
+  image: llm-docker-saiga:latest
+  build:
+    context: .
+    dockerfile: Dockerfile
+  pull_policy: never
+  restart: unless-stopped
+  runtime: nvidia
+  volumes:
+    - ./models:/app/models
+  networks:
+    - default
+  shm_size: '4gb'
+  ulimits:
+    memlock: -1
+  expose:
+    - "5000"
+  entrypoint: ["/app/venv/lib/python3.11/site-packages/llama_cpp_binaries/bin/llama-server"]
+  command:
+    - --model
+    - /app/models/saiga/saiga_yandexgpt_8b.Q4_K_M.gguf
+    - --alias
+    - saiga
+    - --host
+    - 0.0.0.0
+    - --port
+    - "5000"
+    # 4 слота × 8192 токенов на экземпляр, как было у Nemo
+    - --ctx-size
+    - "32768"
+    - --parallel
+    - "4"
+    - --cont-batching
+    - --n-gpu-layers
+    - "999"
+    - --flash-attn
+    # KV в q8_0: с f16 (4 ГБ на 32k) модель 4.4 ГБ на 8-ГБ карту не влезает; так 6.9 ГБ
+    - --cache-type-k
+    - q8_0
+    - --cache-type-v
+    - q8_0
+    - --threads
+    - "4"
+    - --threads-batch
+    - "6"
+    - --no-mmap
+    - --mlock
+    # шаблон чата (Llama-3) из метаданных GGUF; rope берётся из GGUF (--rope-freq-base был только для Nemo)
+    - --jinja
+    # семплинг как у ooba API: клиент шлёт temperature/top_p, остальные фильтры выключены
+    - --temp
+    - "1.0"
+    - --top-p
+    - "1.0"
+    - --top-k
+    - "0"
+    - --min-p
+    - "0"
+    - --repeat-penalty
+    - "1.0"
+    - --metrics
+  healthcheck:
+    test: ["CMD", "curl", "-fsS", "http://localhost:5000/health"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 120s
+
 services:
-  saiga:
-    # 2026-11-07: ooba заменён на голый llama-server (тот же бинарник, что ooba запускал внутри,
-    # llama_cpp_binaries 0.8.0+cu124, build 190bed0, работает на P104/driver 535).
-    # Причина: ooba обслуживал один запрос за раз; здесь 4 параллельных слота с continuous batching.
-    # Откат на ooba: docker compose -f docker-compose.ooba.yml up -d --force-recreate
-    image: llm-docker-saiga:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-    pull_policy: never
-    container_name: saiga-llm
-    restart: unless-stopped
-    runtime: nvidia
+  saiga-llm-1:
+    <<: *llm
+    container_name: saiga-llm-1
     environment:
-      - NVIDIA_VISIBLE_DEVICES=GPU-338bbf4e-a3cf-6a5d-750f-7a7068138c08,GPU-973a0619-a4c1-08d6-04bd-c68217cdf052
+      # CPU-слот PCIEx16(G5), x4
+      - NVIDIA_VISIBLE_DEVICES=GPU-338bbf4e-a3cf-6a5d-750f-7a7068138c08
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       # stub libcuda из CUDA 11.8 toolkit перебивает драйвер хоста — драйверный путь первым (фикс 2026-04-30)
       - LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/nvidia/current:/usr/local/cuda-11.8/lib64:/usr/local/cuda-11.8/targets/x86_64-linux/lib
-    volumes:
-      - ./models:/app/models
-    networks:
-      - default
-    shm_size: '8gb'
-    ulimits:
-      memlock: -1
-    # порты не публикуются: Caddy ходит к saiga-llm:5000 через сеть nginx-proxy (llm.vaibkod.ru — Bearer,
-    # saigaui.vaibkod.ru — basic_auth на встроенный веб-UI llama-server)
-    expose:
-      - "5000"
-    entrypoint: ["/app/venv/lib/python3.11/site-packages/llama_cpp_binaries/bin/llama-server"]
-    command:
-      - --model
-      - /app/models/saiga/saiga_nemo_12b.Q4_K_M.gguf
-      - --alias
-      - saiga
-      - --host
-      - 0.0.0.0
-      - --port
-      - "5000"
-      # 4 слота × 8192 токенов (как был единственный слот у ooba)
-      - --ctx-size
-      - "32768"
-      - --parallel
-      - "4"
-      - --cont-batching
-      - --n-gpu-layers
-      - "999"
-      - --split-mode
-      - layer
-      - --flash-attn
-      - --threads
-      - "10"
-      - --threads-batch
-      - "14"
-      - --no-mmap
-      - --mlock
-      - --rope-freq-base
-      - "1000000"
-      # шаблон чата из метаданных GGUF — как у ooba («Custom (obtained from model metadata)»)
-      - --jinja
-      # семплинг как у ooba API: клиент шлёт temperature/top_p, остальные фильтры выключены
-      - --temp
-      - "1.0"
-      - --top-p
-      - "1.0"
-      - --top-k
-      - "0"
-      - --min-p
-      - "0"
-      - --repeat-penalty
-      - "1.0"
-      - --metrics
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 180s
+
+  saiga-llm-2:
+    <<: *llm
+    container_name: saiga-llm-2
+    environment:
+      # PCIEX1 через USB-райзер (x1): на инференс почти не влияет, ~10% медленнее x4
+      - NVIDIA_VISIBLE_DEVICES=GPU-973a0619-a4c1-08d6-04bd-c68217cdf052
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/nvidia/current:/usr/local/cuda-11.8/lib64:/usr/local/cuda-11.8/targets/x86_64-linux/lib
 
 networks:
   default:

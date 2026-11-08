@@ -13,7 +13,9 @@ services:
       - caddy-data:/data
       - caddy-config:/config
     networks:
-      - default
+      default:
+        # Caddy — балансировщик LLM (Caddyfile, http://:5000): клиенты по-прежнему ходят на saiga-llm:5000
+        aliases: [saiga-llm]
 
 volumes:
   caddy-data:

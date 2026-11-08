@@ -45,6 +45,30 @@ saiga.vaibkod.ru {
     }
 }
 
+# ──────────────── LLM: балансировка между картами ────────────────
+# saiga_yandexgpt_8b, по llama-server на карту (llm/docker-compose.yml, 2026-11-08). least_conn — новый
+# запрос туда, где меньше активных; /health — упавший экземпляр выпадает, всё идёт на живой.
+(saiga_llm) {
+    reverse_proxy saiga-llm-1:5000 saiga-llm-2:5000 {
+        lb_policy least_conn
+        lb_try_duration 10s
+        health_uri /health
+        health_interval 10s
+        health_timeout 5s
+        transport http {
+            read_timeout 600s
+            write_timeout 600s
+        }
+        flush_interval -1  # стримим SSE без буферизации
+    }
+}
+
+# Внутренний вход для docker-сети nginx-proxy: у caddy alias saiga-llm, клиенты ходят на saiga-llm:5000
+# как раньше (веб-чат saiga-web-app). Порт наружу не публикуется.
+http://:5000 {
+    import saiga_llm
+}
+
 # ──────────────── LLM API (Bearer-auth) ────────────────
 llm.vaibkod.ru {
     encode gzip zstd
@@ -53,13 +77,7 @@ llm.vaibkod.ru {
     @authorized header Authorization "Bearer {$LLM_API_KEY}"
 
     handle @authorized {
-        reverse_proxy saiga-llm:5000 {
-            transport http {
-                read_timeout 600s
-                write_timeout 600s
-            }
-            flush_interval -1  # стримим SSE без буферизации
-        }
+        import saiga_llm
     }
 
     handle {
@@ -78,12 +96,7 @@ saigaui.vaibkod.ru {
         denciao $2a$14$rdiH8msX3HizdEeaIT6/Lux38mc0dAB2tDmM5xQIngE2EaSXbNsEm
     }
 
-    reverse_proxy saiga-llm:5000 {
-        transport http {
-            read_timeout 600s
-            write_timeout 600s
-        }
-    }
+    import saiga_llm
 }
 
 # ──────────────── Metrics dashboards (HTTP Basic Auth) ────────────────

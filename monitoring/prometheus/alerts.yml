@@ -142,7 +142,7 @@ groups:
   - name: homeserver-services
     rules:
       - alert: HomeserverContainerDown
-        expr: homeserver_container_ok{name!~"caddy|saiga-llm|saiga-comfyui"} == 0
+        expr: homeserver_container_ok{name!~"caddy|saiga-comfyui"} == 0
         for: 3m
         labels: { severity: warning, instance: homeserver }
         annotations:
@@ -150,12 +150,21 @@ groups:
           description: "Остановлен или unhealthy."
 
       - alert: HomeserverCriticalContainerDown
-        expr: homeserver_container_ok{name=~"caddy|saiga-llm|saiga-comfyui"} == 0
+        expr: homeserver_container_ok{name=~"caddy|saiga-comfyui"} == 0
         for: 3m
         labels: { severity: critical, instance: homeserver }
         annotations:
           summary: "homeserver: {{ $labels.name }} не работает"
           description: "Без него на healspirit не работают Кот Судьбы / кристаллы (или весь вход, если это caddy)."
+
+      # LLM — два экземпляра за балансировкой Caddy: один упал — warning выше (запросы уходят на живой), оба — critical.
+      - alert: HomeserverLlmAllDown
+        expr: sum(homeserver_container_ok{name=~"saiga-llm-.*"}) == 0
+        for: 3m
+        labels: { severity: critical, instance: homeserver }
+        annotations:
+          summary: "homeserver: оба экземпляра LLM не работают"
+          description: "Кот Судьбы, описания кристаллов и веб-чат стоят."
 
       - alert: HomeserverWatchdogStale
         expr: time() - node_textfile_mtime_seconds{file=~".*watchdog.prom"} > 300
