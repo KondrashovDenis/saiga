@@ -1,0 +1,6 @@
+[Unit]
+Description=SMART дисков homeserver -> node-exporter textfile
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/denciao/projects/saiga/monitoring/scripts/smart_textfile.py

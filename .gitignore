@@ -49,3 +49,6 @@ htmlcov/
 # Backup-файлы — не в git
 backups/
 *.sql.gz
+
+# Пароль homeserver → Alertmanager VPS
+monitoring/prometheus/alertmanager_password

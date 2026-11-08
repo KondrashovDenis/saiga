@@ -4,9 +4,23 @@
 
 global:
   scrape_interval: 15s          # как часто опрашивать таргеты
-  evaluation_interval: 15s      # как часто пересчитывать alert rules (rules не используем)
+  evaluation_interval: 15s      # как часто пересчитывать alert rules
   external_labels:
     monitor: 'saiga-homeserver' # подставляется ко всем метрикам
+
+# Правила — prometheus/alerts.yml. Сработавшие алерты уходят в Alertmanager на VPS vaibkod
+# (Telegram из дома заблокирован): Caddy пускает туда только POST с нашего IP и по паролю.
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - scheme: https
+      basic_auth:
+        username: homeserver
+        password_file: /etc/prometheus/alertmanager_password
+      static_configs:
+        - targets: ['alerts.infra.vaibkod.online']
 
 scrape_configs:
   # Сам Prometheus экспортит свои внутренние метрики

@@ -1,0 +1,11 @@
+# Подстраховка: ComfyUI на одной x4-карте, если x1-карта 47984de7 отвалилась.
+# Включает и выключает homeserver-watchdog (monitoring/scripts/homeserver_watchdog.py):
+#   docker compose -f docker-compose.yml -f docker-compose.single-gpu.yml up -d saiga-comfyui
+# Ноды saiga_device без cuda:1 — no-op, кристалл считается целиком на одной карте (~100 с вместо ~50).
+services:
+  saiga-comfyui:
+    # SDXL + ControlNet на одну 8-ГБ карту не влезают целиком — --lowvram, как в Dockerfile
+    command: ["python", "main.py", "--listen", "0.0.0.0", "--port", "8188", "--disable-auto-launch", "--lowvram"]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=GPU-fa0a96a7-0bf7-96fa-2826-4553b6b62e73
+      - CUDA_VISIBLE_DEVICES=0

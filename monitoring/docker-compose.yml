@@ -13,6 +13,8 @@ services:
       - '--web.enable-lifecycle'              # позволяет POST /-/reload без рестарта
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./prometheus/alertmanager_password:/etc/prometheus/alertmanager_password:ro
       - prometheus-data:/prometheus
     networks:
       - monitoring
@@ -48,6 +50,8 @@ services:
       - '--path.procfs=/host/proc'
       - '--path.sysfs=/host/sys'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      # smart.prom и watchdog.prom от monitoring/scripts (systemd-таймеры homeserver-smart / homeserver-watchdog)
+      - '--collector.textfile.directory=/host/var/lib/node_exporter/textfile_collector'
     volumes:
       - /:/host:ro,rslave      # rslave — propagation, чтобы видеть mount-ы хоста
     pid: host

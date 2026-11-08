@@ -1,0 +1,7 @@
+[Unit]
+Description=Сторож homeserver: контейнеры, GPU, подстраховка ComfyUI
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/denciao/projects/saiga/monitoring/scripts/homeserver_watchdog.py

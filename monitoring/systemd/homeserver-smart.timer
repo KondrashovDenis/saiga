@@ -1,0 +1,9 @@
+[Unit]
+Description=SMART дисков homeserver раз в 30 минут
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=30min
+
+[Install]
+WantedBy=timers.target
